@@ -304,18 +304,17 @@ def tostring_pwx(dictionary):
                   'constraints'     : 6,
                   'atomic_forces'   : 7 }
         return order[key]
-    #for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
-    namelists = [ d for d in dictionary if d['type'] == 'namelist' ]
-    card      = [ d for d in dictionary if d['type'] == 'card' ]
-    #for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
-    for namelist_name in sorted(namelist[:].itervalues(), key=namelist_order):
+    for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
+    #namelists = [ d for d in dictionary if d['type'] == 'namelist' ]
+    #card      = [ d for d in dictionary if d['type'] == 'card' ]
+    #for namelist_name in sorted(namelist[:].itervalues(), key=namelist_order):
         string += '&'+namelist_name+'\n'
-        #namelist = dictionary['namelist'][namelist_name]
+        namelist = dictionary['namelist'][namelist_name]
         for name,value in namelist.iteritems():
             string += ' '+name+'='+str(value)+'\n'
         string += '/'+'\n'
-    #for card_name in sorted(dictionary['card'].iterkeys(), key=card_order):
-    for card_name in sorted(card[:].itervalues(), key=card_order):
+    for card_name in sorted(dictionary['card'].iterkeys(), key=card_order):
+    #for card_name in sorted(card[:].itervalues(), key=card_order):
         card = dictionary['card'][card_name]
         string += card_name.upper()+' '+card['options']+'\n'
         for item in card['items']:
