@@ -131,8 +131,6 @@ def parse_upf(filename):
     content = upf_file.read()
     tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
     parsed = {}
-    #data_array = []
-    #re.match(data,content)
     for match in re.finditer(tags,content):
         tag = match.group(0)
         parsed[tag] = []
@@ -142,17 +140,8 @@ def parse_upf(filename):
         parsed[tag] = [ line
                         for inner_match in re.finditer(block,content)
                         for line in inner_match.group(0).split('\n') if line ]
-    #print parsed
     return parsed
-    #for match in re.finditer(test,content):
-    #    print(match.group(0)+'-------')
     #upf_file.close()
-    #NOTE: not a true xml, so it does not work
-#    tree = ET.parse(filename)
-#    root = tree.getroot()
-#    for child in root:
-#        print child.tag, child.attrib
-    #print root.ppinfo.tag
 #TODO: make generic
 def parse_pwx(filename):
     """Input: filename, Return: dictionary of pwx input tags and their values"""
@@ -161,133 +150,134 @@ def parse_pwx(filename):
     pwx_file.close()
     return fromstring_pwx(content)
 def fromstring_pwx(string):
-    #TODO:  change behaviour, namelist or card as attribute not group, keyword[type]=namelist/card
     """Return list of pw.x input parameters"""
-    #string_list = [ line for line in string.split('\n') if line ]
-    #parsed = { 'namelist': {},
-    #           'card'    : {} }
     parsed = {}
-    #Flags
-    namelists = { 'control'  : None,
+    #Flags TODO: unified flag
+    namelist_flag = { 'control'  : None,
                        'system'   : None,
                        'electrons': None,
                        'ions'     : None,
                        'cell'     : None }
-    cards = { 'atomic_species'  : None,
+    card_flag = { 'atomic_species'  : None,
                    'atomic_positions': None,
                    'k_points'        : None,
                    'cell_parameters' : None,
                    'occupations'     : None,
                    'constraints'     : None,
                    'atomic_forces'   : None }
-    end_namelist = re.compile('\s*/\s*')
+    namelist_stop = re.compile('\s*/\s*')
     quoted = re.compile('\'.*\'')
     def set_namelist(key):
-        for k in namelists.iterkeys():
-            namelists[k] = True if k == key else False
+        for k in namelist_flag.iterkeys():
+            namelist_flag[k] = True if k == key else False
     def set_card(key):
-        for k in cards.iterkeys():
-            cards[k] = True if k == key else False
-    def get_namelistheader(line):
-        for k in namelists.iterkeys():
+        for k in card_flag.iterkeys():
+            card_flag[k] = True if k == key else False
+    def get_namelist_start(line):
+        for k in namelist_flag.iterkeys():
             if '&'+k in line.lower():
                 return k
         return False
     def get_cardheader(line):
-        for k in cards.iterkeys():
+        for k in card_flag.iterkeys():
             if k in re.sub(quoted,'',line.lower()):
                 return k
         return False
-    #not useful
-    #def get_option(line):
-    #    if '//' in re.sub('//','//',line):
-    #        print line.split('//')[1]
-    #        return line.split('//')[1] #Return part after //
-    #        #To be eval'd
-    for line in [ line for line in string.split('\n') if line ]:
-        #Control lines
-        #In namelist (see official pwscf documentation)
-        #get_option(line)
-        n = get_namelistheader(line)
-        if n:
-            set_namelist(n)
+    # Split string on newlines
+    for line in [ l for l in string.split('\n') if l ]:
+        # Control lines
+        namelist = get_namelist_start(line)
+        card = get_cardheader(line)
+        if namelist:
+            # Set flag
             set_card(None)
-            #parsed['namelist'][n] = {}
-            continue
-        if re.match(end_namelist,line):
+            set_namelist(namelist)
+            continue # Go to next line
+        elif re.match(namelist_stop,line):
             set_namelist(None)
-        #CARDS
-        c = get_cardheader(line)
-        if c:
+        elif card:
             set_namelist(None)
-            set_card(c)
-            #parsed['card'][c] = {}
-            #parsed['card'][c]['items'] = []
-            #try:
-                #parsed['card'][c]['options'] = re.search('{.*}',line).group(0).strip('{').strip('}')
-                #parsed['card'][c]['options'] = re.split('\s*',line)[1].strip('{').strip('}')
-            keyword = c
-            for attempt in range(2):
-                try:
-                    OPT_COL = 1
-                    parsed[keyword]['options'] = re.split(r'\s*',re.sub(r'\{|\}','',line))[OPT_COL].strip()
-                except KeyError:
-                    parsed[keyword] = {}
-                    continue
-                except IndexError:
-                    try:
-                        parsed[keyword]['options'] = ''
-                    except KeyError:
-                        parsed[keyword] = {}
-                        parsed[keyword]['options'] = ''
-                else:
-                    break
-            #except AttributeError:
-            #    parsed['card'][c]['options'] = ''
-            #except IndexError:
-                #Error index due to no options
-            #    parsed['card'][c]['options'] = ''
-            continue
-        #Process
-        #TODO: switch based on in namelist or card
-        for k,v in namelists.iteritems():
-            if v:
-                KEYWORD_COL = 0
-                VALUE_COL = 1
+            set_card(card)
+            parsed[card] = {} # Only allows one count of each card
+            option_column = 1
+            try:
+                bare_line = re.sub(r'\{|\}', '', line)
+                parsed[card]['options'] = re.split(r'\s*', bare_line)[option_column].strip()
+            except IndexError:
+                # no options, put empty string
+                parsed[card]['options'] = ''
+            continue # Go to next line
+        # Read namelist/card contents
+        # TODO: switch based on in namelist or card
+        # Loop over all possible namelist (prevent including sporadic one)
+        for namelist, flag in namelist_flag.iteritems():
+            if flag:
+                # format : name = value !comment
+                # Remember that comment without whiteline is valid
+                name_column = 0
+                value_column = 1
                 VALUE_VALUE_COL = 0
                 VALUE_COMMENT_COL = 1
-                #in input file: element[0] = element[1] !comment
-                element = [ a.strip() for a in line.strip().split('=') ]
-                #parsed['namelist'][k][element[0]] = element[1].split('!')[0].strip()
-                keyword = element[KEYWORD_COL]
+                line_element = [ a.strip() for a in line.strip().split('=') ]
+                name = line_element[name_column]
                 for attempt in range(2):
+                    # Initialise name if not initialised
                     try:
-                        parsed[keyword]['value'] = element[VALUE_COL].split('!')[VALUE_VALUE_COL].strip()
-                        parsed[keyword]['type'] = 'namelist'
+                        parsed[name]['value'] = line_element[value_column].split('!')[VALUE_VALUE_COL].strip()
+                        parsed[name]['type'] = 'name'
+                        parsed[name]['namelist'] = namelist
                     except KeyError:
-                        parsed[keyword] = {}
+                        parsed[name] = {}
                         continue
                     else:
                         break
-        for k,v in cards.iteritems():
-            if v:
-                #parsed['card'][k]['items'].append(re.split('\s+(?!$)',line.strip()))
-                keyword = k
+                break
+        for card, flag in card_flag.iteritems():
+            if flag:
                 for attempt in range(2):
+                    # Initialise value column if not initialised
                     try:
-                        parsed[keyword]['value'].append(re.split(r'\s+',line.strip()))
-                        parsed[keyword]['type'] = 'card'
+                        parsed[card]['value'].append(re.split(r'\s+',line.strip()))
+                        parsed[card]['type'] = 'card'
                     except KeyError:
-                        parsed[keyword]['value'] = []
+                        parsed[card]['value'] = []
                         continue
                     else:
                         break
+                break
     return parsed
+
+
 def tostring_pwx(dictionary):
     """Return pw.x compatible string from pw.x input dictionary"""
-    #Sorting orders
-    #following standards defined at official documentation
-    string = ""
+    # Initialise output string
+    output_string = ""
+    # Sorting orders, following standards specified in official documentation
+    # Also, forget about non-typed invalid entries
+    # key = names in namelists, card names
+    # value = type, namelists, values
+    def order(entry):
+        key = entry[0]
+        attribute = entry[1]
+        order = { 'control'  : 1,
+                  'system'   : 2,
+                  'electrons': 3,
+                  'ions'     : 4,
+                  'cell'     : 5,
+                  'atomic_species'  : 6,
+                  'atomic_positions': 7,
+                  'k_points'        : 8,
+                  'cell_parameters' : 9,
+                  'occupations'     : 10,
+                  'constraints'     : 11,
+                  'atomic_forces'   : 12 }
+        if (attribute['type'] == 'name'):
+            return order[attribute['namelist']]
+        if (attribute['type'] == 'card'):
+            return order[key]
+        #print(key)
+        return False
+
     def namelist_order(key):
         order = { 'control'  : 1,
                   'system'   : 2,
@@ -295,6 +285,7 @@ def tostring_pwx(dictionary):
                   'ions'     : 4,
                   'cell'     : 5 }
         return order[key]
+
     def card_order(key):
         order = { 'atomic_species'  : 1,
                   'atomic_positions': 2,
@@ -304,22 +295,48 @@ def tostring_pwx(dictionary):
                   'constraints'     : 6,
                   'atomic_forces'   : 7 }
         return order[key]
-    for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
-    #namelists = [ d for d in dictionary if d['type'] == 'namelist' ]
-    #card      = [ d for d in dictionary if d['type'] == 'card' ]
-    #for namelist_name in sorted(namelist[:].itervalues(), key=namelist_order):
-        string += '&'+namelist_name+'\n'
-        namelist = dictionary['namelist'][namelist_name]
-        for name,value in namelist.iteritems():
-            string += ' '+name+'='+str(value)+'\n'
-        string += '/'+'\n'
-    for card_name in sorted(dictionary['card'].iterkeys(), key=card_order):
-    #for card_name in sorted(card[:].itervalues(), key=card_order):
-        card = dictionary['card'][card_name]
-        string += card_name.upper()+' '+card['options']+'\n'
-        for item in card['items']:
-            string += ' '.join(item)+'\n'
-    return string
+    #return dictionary.items()
+    #return names
+    # Write namelists first
+    old_namelist = None
+    for entry in sorted(dictionary.items(), key=order):
+        # As splitted by .items() method
+        key = entry[0]
+        attribute = entry[1]
+        # Writing rule depends on entry type. Skip type-less entries
+        if attribute['type'] == 'name':
+            namelist = attribute['namelist']
+            if (namelist != old_namelist):
+                if (old_namelist != None):
+                    output_string += '/\n'
+                old_namelist = namelist
+                output_string += '&' + namelist + '\n'
+            output_string += ' ' + key + '=' + str(attribute['value']) + '\n'
+        if attribute['type'] == 'card':
+            # Close namelist on namelists-cards transition
+            if (old_namelist != None):
+                old_namelist = None
+                output_string += '/\n'
+            card = key
+            output_string += card.upper() + ' ' + attribute['options'] + '\n'
+            for item in attribute['value']:
+                output_string += ' '.join(map(str,item)) + '\n'
+    return output_string
+
+    #for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
+    #    output_string += '&'+namelist_name+'\n'
+    #    namelist = dictionary['namelist'][namelist_name]
+    #    for name,value in namelist.iteritems():
+    #        output_string += ' '+name+'='+str(value)+'\n'
+    #    output_string += '/'+'\n'
+    #for card_name in sorted(dictionary['card'].iterkeys(), key=card_order):
+    #    card = dictionary['card'][card_name]
+    #    output_string += card_name.upper()+' '+card['options']+'\n'
+    #    for item in card['items']:
+    #        output_string += ' '.join(item)+'\n'
+    #return output_string
+
+
 def print_pwx(dictionary):
     """Write pw.x compatible input format based on that"""
     print(tostring_pwx(dictionary))
