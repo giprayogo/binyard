@@ -6,7 +6,7 @@ import sys
 import fnmatch
 import re
 import time
-#pip
+
 import scandir
 import xml.etree.ElementTree as ET
 import collections
@@ -92,7 +92,7 @@ def parse_casino(filename):
         for block_headers in re.finditer(block_header,match):
             match = block_headers.group(0)
             print(match)
-    print parsed
+    print(parsed)
 #Copied from old parser.py lib
 def parse_pbs(filename):
     pbs_file = open(filename,'r')
@@ -168,18 +168,18 @@ def fromstring_pwx(string):
     namelist_stop = re.compile('\s*/\s*')
     quoted = re.compile('\'.*\'')
     def set_namelist(key):
-        for k in namelist_flag.iterkeys():
+        for k in namelist_flag.keys():
             namelist_flag[k] = True if k == key else False
     def set_card(key):
-        for k in card_flag.iterkeys():
+        for k in card_flag.keys():
             card_flag[k] = True if k == key else False
     def get_namelist_start(line):
-        for k in namelist_flag.iterkeys():
+        for k in namelist_flag.keys():
             if '&'+k in line.lower():
                 return k
         return False
     def get_cardheader(line):
-        for k in card_flag.iterkeys():
+        for k in card_flag.keys():
             if k in re.sub(quoted,'',line.lower()):
                 return k
         return False
@@ -210,7 +210,7 @@ def fromstring_pwx(string):
         # Read namelist/card contents
         # TODO: switch based on in namelist or card
         # Loop over all possible namelist (prevent including sporadic one)
-        for namelist, flag in namelist_flag.iteritems():
+        for namelist, flag in namelist_flag.items():
             if flag:
                 # format : name = value !comment
                 # Remember that comment without whiteline is valid
@@ -232,7 +232,7 @@ def fromstring_pwx(string):
                     else:
                         break
                 break
-        for card, flag in card_flag.iteritems():
+        for card, flag in card_flag.items():
             if flag:
                 for attempt in range(2):
                     # Initialise value column if not initialised
@@ -323,109 +323,7 @@ def tostring_pwx(dictionary):
                 output_string += ' '.join(map(str,item)) + '\n'
     return output_string
 
-    #for namelist_name in sorted(dictionary['namelist'].iterkeys(), key=namelist_order):
-    #    output_string += '&'+namelist_name+'\n'
-    #    namelist = dictionary['namelist'][namelist_name]
-    #    for name,value in namelist.iteritems():
-    #        output_string += ' '+name+'='+str(value)+'\n'
-    #    output_string += '/'+'\n'
-    #for card_name in sorted(dictionary['card'].iterkeys(), key=card_order):
-    #    card = dictionary['card'][card_name]
-    #    output_string += card_name.upper()+' '+card['options']+'\n'
-    #    for item in card['items']:
-    #        output_string += ' '.join(item)+'\n'
-    #return output_string
-
 
 def print_pwx(dictionary):
     """Write pw.x compatible input format based on that"""
     print(tostring_pwx(dictionary))
-#def write_pwx(filename,dictionary):
-#    out = open(filename, 'w')
-#    out.print(tostring_pwx(dictionary))
-#    out.close()
-###DEPRECATED###
-#def get_from_file(filename,*rules):
-#    """ Return list of """
-#    e = []
-#    for rule in rules:
-#        match = False
-#        try:
-#            grep = rule['condition']
-#            sed = rule['task']
-#            out = open(filename, 'r');
-#            for line in out.readlines():
-#                if grep(line):
-#                    e.extend(sed(line))
-#                    match = True
-#            out.close()
-#            if not match and rule['else']:
-#                mark = rule['else']
-#                e.extend(mark)
-#        except IOError:
-#            err = sys.argv[0] + ': ' + filename + ': No such file'
-#            sys.exit(err)
-#        except KeyError:
-#            pass
-#    if e:
-#def get_dirs_with(file_set, root='./'):
-#    """ Return generator of directories under root containing certain file_set"""
-#    def files_are_there(filenames):
-#        for pattern in file_set:
-#            if not fnmatch.filter(filenames,pattern): #Allow regex in filename set
-#                return False
-#        return True
-#    not_in_rubbish = lambda path: not 'rubbish' in path
-#    return (dirpath for dirpath,dirnames,filenames in os.walk(root)\
-#        if (files_are_there(filenames)) and not_in_rubbish(dirpath))
-#        return e
-#def get_from_file(filename,*rules):
-#    """similar to grep+sed"""
-#    e = []
-#    for rule in rules:
-#        try:
-#            match = False
-#            out = open(filename, 'r')
-#            for line in out.readlines():
-#                if rule.contain(line):
-#                    e.extend(rule.do(line))
-#                    match = True
-#            out.close()
-#            if not match:
-#                e.extend(rule.default)
-#        except IOError:
-#            err = sys.argv[0] + ': cannot access ' + filename + ': No such file'
-#            sys.exit(err)
-#        except KeyError:
-#            pass
-#    return e
-#
-#def _line_contain(keyword):
-#    """Return check function of some keyword in some line"""
-#    return lambda line: keyword in line
-#def line_contain(*keywords):
-#    """Return chain of tests if line contain specified keywords"""
-#    def contain_chain(line):
-#        chain = True
-#        for keyword in keywords:
-#            chain = chain and _line_contain(keyword)(line)
-#        return chain
-#    return contain_chain
-#def test_import():
-#    print "OK"
-#
-#Classes
-#class Rule:
-#    """ Something """
-#    def __init__(self, contain=None, do=None, default=None):
-#        """ Create a new rule, with function contain, function do, and default list"""
-#        #Return every line by default
-#        self.contain = True if contain is None else contain
-#        #Return whole line by default
-#        if do is None:
-#            self.do = lambda x: x
-#        else:
-#            self.do = do
-#        #Empty default at no match
-#        self.default = [] if default is None else default
-#
