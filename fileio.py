@@ -323,14 +323,14 @@ def tostring_pwx(dictionary):
                 # Treat numerical details differently
                 if card == 'cell_parameters':
                     #try:
-                    formatted = [ "{:0.15f}".format(x) for x in item ]
+                    formatted = [ "{:0.15f}".format(float(x)) for x in item ]
                     #except ValueError:
                         # sometimes positions are still left in original string
                         #formatted = [ "{:0.15f}".format(float(x)) for x in item ]
                     output_string += ' '.join(formatted) + '\n'
                 elif card == 'atomic_positions':
                     # remember that the first element is atom type
-                    formatted = [ "{:0.15f}".format(x) if i > 0 else "{:3}".format(x)
+                    formatted = [ "{:0.15f}".format(float(x)) if i > 0 else "{:3}".format(x)
                                   for i,x in enumerate(item) ]
                     output_string += ' '.join(formatted) + '\n'
                 else:
