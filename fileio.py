@@ -201,8 +201,8 @@ def fromstring_pwx(string):
             parsed[card] = {} # Only allows one count of each card
             option_column = 1
             try:
-                bare_line = re.sub(r'\{|\}', '', line)
-                parsed[card]['options'] = re.split(r'\s*', bare_line)[option_column].strip()
+                bare_line = re.sub(r'(\{|\}|\(|\))', '', line)
+                parsed[card]['options'] = re.split(r'\s+', bare_line)[option_column].strip()
             except IndexError:
                 # no options, put empty string
                 parsed[card]['options'] = ''
@@ -320,7 +320,21 @@ def tostring_pwx(dictionary):
             card = key
             output_string += card.upper() + ' ' + attribute['options'] + '\n'
             for item in attribute['value']:
-                output_string += ' '.join(map(str,item)) + '\n'
+                # Treat numerical details differently
+                if card == 'cell_parameters':
+                    #try:
+                    formatted = [ "{:0.15f}".format(x) for x in item ]
+                    #except ValueError:
+                        # sometimes positions are still left in original string
+                        #formatted = [ "{:0.15f}".format(float(x)) for x in item ]
+                    output_string += ' '.join(formatted) + '\n'
+                elif card == 'atomic_positions':
+                    # remember that the first element is atom type
+                    formatted = [ "{:0.15f}".format(x) if i > 0 else "{:3}".format(x)
+                                  for i,x in enumerate(item) ]
+                    output_string += ' '.join(formatted) + '\n'
+                else:
+                    output_string += ' '.join(map(str,item)) + '\n'
     return output_string
 
 
