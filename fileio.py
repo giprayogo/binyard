@@ -319,6 +319,7 @@ def tostring_pwx(dictionary):
                 output_string += '/\n'
             card = key
             output_string += card.upper() + ' ' + attribute['options'] + '\n'
+            # Note that each item == one line of card
             for item in attribute['value']:
                 # Treat numerical details differently
                 if card == 'cell_parameters':
@@ -334,6 +335,7 @@ def tostring_pwx(dictionary):
                                   for i,x in enumerate(item) ]
                     output_string += ' '.join(formatted) + '\n'
                 else:
+                    #print(item)
                     output_string += ' '.join(map(str,item)) + '\n'
     return output_string
 
