@@ -11,27 +11,33 @@ import scandir
 import xml.etree.ElementTree as ET
 import collections
 
-#TODO: supposedly case insensitive
-def listdirwith(path,file_list):
-    """ Return list of directories under path containing file_list"""
+#TODO: (BUG) supposedly case insensitive
+def listdirwith(path, filename_pattern_list, dirpath_filter):
+    """ Input: root_path, list of filename patterns that should exist; Output: list of directories under path containing filename_pattern_list"""
     def files_are_there(filenames):
-        #Check if ALL pattern in file_list exists in current dir's filenames
+        #Check if ALL pattern in filename_pattern_list exists in current dir's filenames
         #Unix-style regex is allowed
-        for pattern in file_list:
+        for pattern in filename_pattern_list:
             #print(pattern)
             #if not fnmatch.filter(filenames,pattern):
             #if not [n for n in filenames if fnmatch.fnmatch(n,pattern)]:
-            if not [n for n in filenames if fnmatch.fnmatchcase(n,pattern)]:
+            if not [ n for n in filenames if fnmatch.fnmatchcase(n,pattern) ]:
+            #    parsed[card]['options'] = ''
                 return False
         return True
+
     return [ dirpath
-             for dirpath,dirnames,filenames in scandir.walk(path)\
-             if files_are_there(filenames) and not 'rubbish' in dirpath ]
-def find_file(path,pattern):
+        for dirpath,dirnames,filenames in scandir.walk(path)\
+        if files_are_there(filenames) and not 'rubbish' in dirpath ]
+
+
+def find_file(path, pattern):
     """Wrapper for fnmatch.filter, with additional filecheck"""
     return [ os.path.join(path,filename) for filename in fnmatch.filter(os.listdir(path),pattern)\
              if os.path.isfile(os.path.join(path,filename)) ]
-def readlineswith(filename,pattern='',do=lambda x:x,default=[]):
+
+
+def readlineswith(filename,pattern='', do=lambda x:x, default=[]):
     """even more similar to grep+sed
        but return list instead of string"""
     try:
@@ -45,14 +51,16 @@ def readlineswith(filename,pattern='',do=lambda x:x,default=[]):
         err = sys.argv[0] + ': cannot access ' + filename + ': No such file'
         sys.exit(err)
 
-#-----SAMPLE-----
-#ned               : 128            #*! Number of down electrons (Integer)
-#periodic          : T              #*! Periodic boundary conditions (Boolean)
-#atom_basis_type   : blip           #*! Basis set type (Text)
-#%block npcell
-#4 4 1 
-#%endblock npcell
+
 def parse_casino(filename):
+    """ Input: casino input filepath, Output: Dictionary of casino keywords values """
+    # Input format snippet :
+    #ned               : 128            #*! Number of down electrons (Integer)
+    #periodic          : T              #*! Periodic boundary conditions (Boolean)
+    #atom_basis_type   : blip           #*! Basis set type (Text)
+    #%block npcell
+    #4 4 1 
+    #%endblock npcell
     casino_input = open(filename,'r')
     content = casino_input.read()
     casino_input.close()
@@ -93,6 +101,8 @@ def parse_casino(filename):
             match = block_headers.group(0)
             print(match)
     print(parsed)
+
+
 #Copied from old parser.py lib
 def parse_pbs(filename):
     pbs_file = open(filename,'r')
@@ -106,6 +116,8 @@ def parse_pbs(filename):
     content = pbs_file.read()
     pbs_file.close()
     return fromstring_pbs(content)
+
+
 def fromstring_pbs(string):
     string_list = [
             v.split(' = ')
@@ -115,6 +127,8 @@ def fromstring_pbs(string):
              (key,value)
              for (key,value) in string_list
              )
+
+
 #def parse_bash(filename):
 def fromstring_bash(string,splitter=','):
     string_list = [
@@ -125,6 +139,8 @@ def fromstring_bash(string,splitter=','):
              (key,value)
              for (key,value) in string_list
              )
+
+
 #TODO:proper integration
 def parse_upf(filename):
     upf_file = open(filename, 'r')
@@ -143,12 +159,22 @@ def parse_upf(filename):
     return parsed
     #upf_file.close()
 #TODO: make generic
+
+
 def parse_pwx(filename):
     """Input: filename, Return: dictionary of pwx input tags and their values"""
     pwx_file = open(filename,'r')
     content = pwx_file.read()
     pwx_file.close()
     return fromstring_pwx(content)
+
+
+def parse_pwx2(open_file):
+    """Input: pw.x input filehandle Output: dictionary of pw.x input tags"""
+    #TODO: make this default parse_pwx
+    return fromstring_pwx(open_file.read())
+
+
 def fromstring_pwx(string):
     """Return list of pw.x input parameters"""
     parsed = {}
@@ -201,9 +227,11 @@ def fromstring_pwx(string):
             parsed[card] = {} # Only allows one count of each card
             option_column = 1
             try:
-                bare_line = re.sub(r'(\{|\}|\(|\))', '', line)
-                parsed[card]['options'] = re.split(r'\s+', bare_line)[option_column].strip()
-            except IndexError:
+                line_stripped = re.sub(r'(\{|\}|\(|\)|\=)', ' ', line)
+                alphabet_character = re.compile(r'[A-za-z]')
+                option = re.compile(r'(?<!^)(?<=\s)[A-za-z]+(?=\s+)')
+                parsed[card]['options'] = option.search(line_stripped).group(0)
+            except AttributeError:
                 # no options, put empty string
                 parsed[card]['options'] = ''
             continue # Go to next line
@@ -338,8 +366,3 @@ def tostring_pwx(dictionary):
                     #print(item)
                     output_string += ' '.join(map(str,item)) + '\n'
     return output_string
-
-
-def print_pwx(dictionary):
-    """Write pw.x compatible input format based on that"""
-    print(tostring_pwx(dictionary))
