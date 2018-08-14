@@ -12,23 +12,19 @@ import xml.etree.ElementTree as ET
 import collections
 
 #TODO: (BUG) supposedly case insensitive
-def listdirwith(path, filename_pattern_list, dirpath_filter):
+def listdirwith(path, filename_pattern_list, dirpath_filter=None):
     """ Input: root_path, list of filename patterns that should exist; Output: list of directories under path containing filename_pattern_list"""
     def files_are_there(filenames):
         #Check if ALL pattern in filename_pattern_list exists in current dir's filenames
         #Unix-style regex is allowed
         for pattern in filename_pattern_list:
-            #print(pattern)
-            #if not fnmatch.filter(filenames,pattern):
-            #if not [n for n in filenames if fnmatch.fnmatch(n,pattern)]:
             if not [ n for n in filenames if fnmatch.fnmatchcase(n,pattern) ]:
-            #    parsed[card]['options'] = ''
                 return False
         return True
 
     return [ dirpath
         for dirpath,dirnames,filenames in scandir.walk(path)\
-        if files_are_there(filenames) and not 'rubbish' in dirpath ]
+        if files_are_there(filenames) and not 'rubbish' in dirpath and dirpath_filter in dirpath ]
 
 
 def find_file(path, pattern):
