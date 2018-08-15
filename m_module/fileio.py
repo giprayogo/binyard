@@ -225,7 +225,7 @@ def fromstring_pwx(string):
             try:
                 line_stripped = re.sub(r'(\{|\}|\(|\)|\=)', ' ', line)
                 alphabet_character = re.compile(r'[A-za-z]')
-                option = re.compile(r'(?<!^)(?<=\s)[A-za-z]+(?=\s+)')
+                option = re.compile(r'(?<!^)(?<=\s)[A-za-z]+(?=\s*)')
                 parsed[card]['options'] = option.search(line_stripped).group(0)
             except AttributeError:
                 # no options, put empty string
