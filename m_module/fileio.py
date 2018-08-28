@@ -11,25 +11,32 @@ import scandir
 import xml.etree.ElementTree as ET
 import collections
 
-#TODO: (BUG) supposedly case insensitive
-def listdirwith(path, filename_pattern_list, dirpath_filter=None):
-    """ Input: root_path, list of filename patterns that should exist; Output: list of directories under path containing filename_pattern_list"""
+# TODO: (BUG) supposedly case insensitive
+def listdirwith(*filename_pattern_list, path='.'):
+    """ Return list of directories that contain files in the list.
+        May use wildcard matches (*) etc. as in shell.
+        Input   : root path, list of searched filename patterns;
+        Output  : --list-- of directories under path containing filename_pattern_list"""
+
     def files_are_there(filenames):
-        #Check if ALL pattern in filename_pattern_list exists in current dir's filenames
-        #Unix-style regex is allowed
-        for pattern in filename_pattern_list:
-            if not [ n for n in filenames if fnmatch.fnmatchcase(n,pattern) ]:
-                return False
+        """ Test whether ALL pattern in filename_pattern_list exists in current dir's filenames """
+        #for pattern in filename_pattern_list:
+            # If no files in the directory match specified pattern, return false
+        if not [ filename
+                for pattern in filename_pattern_list
+                for filename in filenames if fnmatch.fnmatchcase(filename, pattern) ]:
+            return False
         return True
 
     return [ dirpath
-        for dirpath,dirnames,filenames in scandir.walk(path)\
-        if files_are_there(filenames) and not 'rubbish' in dirpath and dirpath_filter in dirpath ]
+        for dirpath,dirnames,filenames in scandir.walk(path)
+        if files_are_there(filenames)
+        and not 'rubbish' in dirpath ]
 
 
 def find_file(path, pattern):
     """Wrapper for fnmatch.filter, with additional filecheck"""
-    return [ os.path.join(path,filename) for filename in fnmatch.filter(os.listdir(path),pattern)\
+    return [ os.path.join(path,filename) for filename in fnmatch.filter(os.listdir(path),pattern)
              if os.path.isfile(os.path.join(path,filename)) ]
 
 
