@@ -40,19 +40,20 @@ def find_file(path, pattern):
              if os.path.isfile(os.path.join(path,filename)) ]
 
 
-def readlineswith(filename,pattern='', do=lambda x:x, default=[]):
-    """even more similar to grep+sed
-       but return list instead of string"""
-    try:
-        out = open(filename,'r')
-        regex_pattern = re.compile(pattern)
-        e = [ do(line) for line in out.readlines() if regex_pattern.search(line) ]
-        out.close()
-        if not e: raise Exception('No matching line in '+filename)
-        return e
-    except IOError:
-        err = sys.argv[0] + ': cannot access ' + filename + ': No such file'
-        sys.exit(err)
+def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, default=[]):
+    """ Return list of lines that match specified pattern(s) (OR match)
+        with optional extra action """
+    e = []
+    echo = 0
+    for line in (line.rstrip() for line in filehandle.readlines()):
+        for pattern in pattern_list:
+            if re.search(pattern, line):
+                e.append(process(line))
+                echo = after
+            elif echo:
+                e.append(process(line))
+                echo -= 1
+    return e
 
 
 def parse_casino(filename):
