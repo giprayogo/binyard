@@ -40,6 +40,16 @@ def find_file(path, pattern):
              if os.path.isfile(os.path.join(path,filename)) ]
 
 
+# TODO: make this more generic by:
+# @regex for preincluded pattern, normally only accepts function
+# @from_file when want to use filename as filehandle
+# NOTE: does not really match decorator pattern...
+#def from_file(function):
+#    def filehandled(filename, *args, **kwargs):
+#        with open(filename, 'r') as the_file:
+#            function(the_file, *args, **kwargs)
+#    return filehandled
+
 def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, default=[]):
     """ Return list of lines that match specified pattern(s) (OR match)
         with optional extra action """
@@ -48,12 +58,18 @@ def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, defaul
     for line in (line.rstrip() for line in filehandle.readlines()):
         for pattern in pattern_list:
             if re.search(pattern, line):
-                e.append(process(line))
+                # TODO: still not decided whether it is better to include None
+                processed_line = process(line)
+                if processed_line:
+                    e.append(processed_line)
                 echo = after
             elif echo:
-                e.append(process(line))
+                processed_line = process(line)
+                if processed_line:
+                    e.append(processed_line)
                 echo -= 1
-    return e
+    if e:
+        return e
 
 
 def parse_casino(filename):
@@ -63,7 +79,7 @@ def parse_casino(filename):
     #periodic          : T              #*! Periodic boundary conditions (Boolean)
     #atom_basis_type   : blip           #*! Basis set type (Text)
     #%block npcell
-    #4 4 1 
+    #4 4 1
     #%endblock npcell
     casino_input = open(filename,'r')
     content = casino_input.read()
