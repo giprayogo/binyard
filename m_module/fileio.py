@@ -50,26 +50,34 @@ def find_file(path, pattern):
 #            function(the_file, *args, **kwargs)
 #    return filehandled
 
-def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, default=[]):
+def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, default=[], count=False):
     """ Return list of lines that match specified pattern(s) (OR match)
         with optional extra action """
-    e = []
-    echo = 0
-    for line in (line.rstrip() for line in filehandle.readlines()):
-        for pattern in pattern_list:
-            if re.search(pattern, line):
-                # TODO: still not decided whether it is better to include None
-                processed_line = process(line)
-                if processed_line:
-                    e.append(processed_line)
-                echo = after
-            elif echo:
-                processed_line = process(line)
-                if processed_line:
-                    e.append(processed_line)
-                echo -= 1
-    if e:
-        return e
+    if count:
+        count = 0
+        for line in filehandle.readlines():
+            for pattern in pattern_list:
+                if re.search(pattern, line):
+                    count += 1
+        return count
+    else:
+        e = []
+        echo = 0
+        for line in filehandle.readlines():
+            for pattern in pattern_list:
+                if re.search(pattern, line):
+                    # TODO: still not decided whether it is better to include None
+                    processed_line = process(line)
+                    if processed_line:
+                        e.append(processed_line)
+                    echo = after
+                elif echo:
+                    processed_line = process(line)
+                    if processed_line:
+                        e.append(processed_line)
+                    echo -= 1
+        if e:
+            return e
 
 
 def parse_casino(filename):
