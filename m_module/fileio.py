@@ -22,10 +22,9 @@ def listdirwith(*filename_pattern_list, path='.'):
         """ Test whether ALL pattern in filename_pattern_list exists in current dir's filenames """
         #for pattern in filename_pattern_list:
             # If no files in the directory match specified pattern, return false
-        if not [ filename
-                for pattern in filename_pattern_list
-                for filename in filenames if fnmatch.fnmatchcase(filename, pattern) ]:
-            return False
+        for pattern in filename_pattern_list:
+            if not [ n for n in filenames if fnmatch.fnmatchcase(n, pattern) ]:
+                return False
         return True
 
     return [ dirpath
@@ -203,6 +202,7 @@ def parse_pwx2(open_file):
     return fromstring_pwx(open_file.read())
 
 
+#TODO: recognize comman (,) separated input as newline
 def fromstring_pwx(string):
     """Return list of pw.x input parameters"""
     parsed = {}
@@ -221,24 +221,30 @@ def fromstring_pwx(string):
                    'atomic_forces'   : None }
     namelist_stop = re.compile('\s*/\s*')
     quoted = re.compile('\'.*\'')
+
     def set_namelist(key):
         for k in namelist_flag.keys():
             namelist_flag[k] = True if k == key else False
+
     def set_card(key):
         for k in card_flag.keys():
             card_flag[k] = True if k == key else False
+
     def get_namelist_start(line):
         for k in namelist_flag.keys():
             if '&'+k in line.lower():
                 return k
         return False
+
     def get_cardheader(line):
         for k in card_flag.keys():
             if k in re.sub(quoted,'',line.lower()):
                 return k
         return False
-    # Split string on newlines
-    for line in [ l for l in string.split('\n') if l ]:
+
+
+    # Split string on newlines and comma
+    for i, line in enumerate(( l for l in re.split(r'[\n,]', string) if l )):
         # Control lines
         namelist = get_namelist_start(line)
         card = get_cardheader(line)
@@ -282,6 +288,7 @@ def fromstring_pwx(string):
                         parsed[name]['value'] = line_element[value_column].split('!')[VALUE_VALUE_COL].strip()
                         parsed[name]['type'] = 'name'
                         parsed[name]['namelist'] = namelist
+                        parsed[name]['sort'] = i
                     except KeyError:
                         parsed[name] = {}
                         continue
@@ -334,6 +341,15 @@ def tostring_pwx(dictionary):
         #print(key)
         return False
 
+    def namesort(entry):
+        key = entry[0]
+        attribute = entry[1]
+        if (attribute['type'] == 'card'):
+            return False
+        if (attribute['type'] == 'name'):
+            return attribute['sort']
+        return False
+
     def namelist_order(key):
         order = { 'control'  : 1,
                   'system'   : 2,
@@ -355,7 +371,7 @@ def tostring_pwx(dictionary):
     #return names
     # Write namelists first
     old_namelist = None
-    for entry in sorted(dictionary.items(), key=order):
+    for entry in sorted(sorted(dictionary.items(), key=namesort), key=order):
         # As splitted by .items() method
         key = entry[0]
         attribute = entry[1]
@@ -392,5 +408,9 @@ def tostring_pwx(dictionary):
                     output_string += ' '.join(formatted) + '\n'
                 else:
                     #print(item)
-                    output_string += ' '.join(map(str,item)) + '\n'
+                    try:
+                        output_string += ' '.join(map(str,item)) + '\n'
+                    except TypeError:
+                        # if only one element in a line (not a list)
+                        output_string += str(item) + '\n'
     return output_string
