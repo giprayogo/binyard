@@ -5,7 +5,7 @@
 #rm *.aux *.dvi *.idx *.log *.toc *.bbl *.blg *.out
 ha=ha
 while true ; do
-  if [ "$1" = "" ]; then
+  if [ -z "$1" ]; then
     numtex=$(ls -l *.tex | wc -l)
     [ $numtex -gt 1 ] && [ $ha ] && { ls *.tex; ha=''; }
     [ $numtex -eq 1 ] && target=$(ls *.tex) || { echo "Specify compiled TeX file name!"; read -r target; }
@@ -14,12 +14,10 @@ while true ; do
   fi
   [ -f "$target" ] && break || { echo "$0: $target: No such file"; target=""; }
 done
-echo $target
-target=$(echo $target | sed 's/.tex//')
+echo "Compile target: $target"
+target=${target%.tex}
 
 PATH=/opt/local/bin/:$PATH
-#pdflatex --kanji=sjis $target
-#pdflatex --kanji=sjis $target
 platex --kanji=sjis $target
 pbibtex --kanji=sjis $target
 platex --kanji=sjis $target
