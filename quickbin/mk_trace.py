@@ -3,13 +3,14 @@
 # TODO: [fixed, by choosing multiple input files] choose scalar/dmc
 #       [done] choose which column (read first # line)
 #       [fixed] use filename instead of series number
-#       scalar ordering is wrong (important for multiple series)
+#       [fixed] scalar ordering is wrong (important for multiple series)
+#       total rewrite with matplotlib
 import os
 import sys
 
 import numpy as np
 import re
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 scalars = None
 quantities = None
@@ -89,16 +90,12 @@ if len(kinds) == 1:
 else:
     raise StopIteration('More than two kinds of input files (not yet implemented)')
     exit()
-#for serie in series:
-#    label += '_'+serie
-#for twist in twists:
-#    label += '_'+twist
-#label += '_'+quantities[quantity]
 label = '_'.join(label_list)
 
 # x axis and listification
 max_length = max([ len(qlist[key]) for key in qlist.keys() ])
 x = list(np.arange(max_length))
+
 squarelist = [ qlist[key] for key in sorted(qlist.keys()) ]
 squarelist.insert(0,x)
 
