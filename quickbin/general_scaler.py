@@ -26,7 +26,7 @@ with open(filename, 'r') as data_file:
     for line in data_file.readlines():
         if not line.strip():
             print('')
-        elif '#' in line:
+        elif '^#' in line:
             print(line.rstrip())
         else:
             split = line.split()
