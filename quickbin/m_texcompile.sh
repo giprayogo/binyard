@@ -19,11 +19,11 @@ echo "Compile target: $target"
 target=${target%.tex}
 
 PATH=/opt/local/bin/:$PATH
-platex --kanji=sjis $target
-pbibtex --kanji=sjis $target
-platex --kanji=sjis $target
-pbibtex --kanji=sjis $target
-platex --kanji=sjis $target
-dvipdfmx $target.dvi
+platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+pbibtex -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+pbibtex -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+dvipdfmx -halt-on-error -interaction=nonstopmode $target.dvi
 #rm *~
 open $target.pdf

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import re
 from fractions import Fraction
 
 try:
@@ -26,7 +27,7 @@ with open(filename, 'r') as data_file:
     for line in data_file.readlines():
         if not line.strip():
             print('')
-        elif '^#' in line:
+        elif re.match('#', line):
             print(line.rstrip())
         else:
             split = line.split()
