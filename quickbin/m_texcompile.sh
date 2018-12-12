@@ -20,9 +20,9 @@ target=${target%.tex}
 
 PATH=/opt/local/bin/:$PATH
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
-pbibtex -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+pbibtex
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
-pbibtex -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
+pbibtex
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
 dvipdfmx -halt-on-error -interaction=nonstopmode $target.dvi
 #rm *~
