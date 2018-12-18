@@ -3,6 +3,7 @@
 import sys
 import re
 from fractions import Fraction
+from decimal import Decimal
 
 try:
     filename = sys.argv[1]
@@ -12,7 +13,7 @@ except IndexError:
     exit()
 
 try:
-    multiplier = float(Fraction(sys.argv[3]))
+    multiplier = Decimal(float(Fraction(sys.argv[3])))
 except IndexError:
     print("Usage: () FILENAME COLUMN MULTIPLIER/DIVIDER_COLUMN_INDEX(c[idx])".format(sys.argv[0]))
     exit()
@@ -33,7 +34,7 @@ with open(filename, 'r') as data_file:
             split = line.split()
             for column in columns:
                 if multiplier:
-                    split[column] = float(split[column]) * multiplier
+                    split[column] = Decimal(split[column]) * multiplier
                 else:
-                    split[column] = 1/float(split[multiplier_index])
+                    split[column] = 1/Decimal(split[multiplier_index])
             print(' '.join(map(str,split)))

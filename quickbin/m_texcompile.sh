@@ -20,10 +20,10 @@ target=${target%.tex}
 
 PATH=/opt/local/bin/:$PATH
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
-pbibtex
+pbibtex --kanji=sjis $target
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
-pbibtex
+pbibtex --kanji=sjis $target
 platex  -halt-on-error -interaction=nonstopmode --kanji=sjis $target || exit -1
-dvipdfmx -halt-on-error -interaction=nonstopmode $target.dvi
+dvipdfmx  $target
 #rm *~
 open $target.pdf
