@@ -403,7 +403,15 @@ def tostring_pwx(dictionary):
                     output_string += ' '.join(formatted) + '\n'
                 elif card == 'atomic_positions':
                     # remember that the first element is atom type
-                    formatted = [ "{:0.15f}".format(float(x)) if i > 0 else "{:3}".format(x)
+                    #formatted = [ "{:0.15f}".format(float(x)) else "{:3}".format(x)
+                    def pos_format(i,x):
+                        if i == 0:
+                            return "{:3}".format(x)
+                        if i <= 3:
+                            return "{:0.15f}".format(float(x))
+                        else:
+                            return "{:d}".format(int(x))
+                    formatted = [ pos_format(i,x)
                                   for i,x in enumerate(item) ]
                     output_string += ' '.join(formatted) + '\n'
                 else:
