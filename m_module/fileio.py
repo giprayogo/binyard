@@ -297,11 +297,12 @@ def fromstring_pwx(string):
                 break
         for card, flag in card_flag.items():
             if flag:
-                for attempt in range(2):
+                for attempt in range(2): # try again once if fails
                     # Initialise value column if not initialised
                     try:
                         parsed[card]['value'].append(re.split(r'\s+',line.strip()))
                         parsed[card]['type'] = 'card'
+                        parsed[card]['sort'] = i
                     except KeyError:
                         parsed[card]['value'] = []
                         continue
