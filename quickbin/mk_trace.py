@@ -32,13 +32,12 @@ try:
         return ''
     # "scalar": input file metadata tuple (filename, twist, series, dmc/scalar)
     # extract twist, series, and dmc/scalar type information from the file(path) name
-    scalars = [ (path,
-        resolve(re.search(r'tw[0-9]+', path)),
-        resolve(re.search(r'\.s[0-9]+\.', path)).strip('.').strip('s'),
+    scalars = [ (filename,
+        resolve(re.search(r'tw[0-9]+', filename)),
+        resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'),
         #re.search(r'\.[a-z]\.dat',path)[0].strip('.dat').strip('.'))
-        resolve(re.search(r'(\.[a-z]+)(?=\.dat)', path)).strip('.'))
-            for path in os.listdir('.')
-            for filename in filenames if filename == path ]
+        resolve(re.search(r'(\.[a-z]+)(?=\.dat)', filename)).strip('.'))
+            for filename in filenames if any(path == filename for path in os.listdir('.')) ]
     # sort by series, then twist
     scalars.sort(key=lambda x: x[2])
     scalars.sort(key=lambda x: x[1])
