@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # trace qmcpack scalar.dat or dmc.dat
-# TODO: [fixed, by choosing multiple input files] choose scalar/dmc
+# TODO: multiple quantities
+#       [fixed, by choosing multiple input files] choose scalar/dmc
 #       [done] choose which column (read first # line)
 #       [fixed] use filename instead of series number
 #       [fixed] scalar ordering is wrong (important for multiple series)
@@ -10,35 +11,47 @@ import sys
 
 import numpy as np
 import re
+import argparse
 #import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser()
+# TODO: multiple quantities
+parser.add_argument('-q', '--quantities')
+parser.add_argument('files', nargs='+')
+parsed = parser.parse_args()
 
 scalars = None
 quantities = None
 qlist = {}
 try:
-    filenames = sys.argv[1:] if sys.argv[1:] else None
-    # scalar: (filename, twist, series, dmc/scalar)
+    filenames = parsed.files
     def resolve(regex_match):
+    # instead of None, return empty string on non-match
         if regex_match:
             return regex_match.group(0)
         return ''
+    # "scalar": input file metadata tuple (filename, twist, series, dmc/scalar)
+    # extract twist, series, and dmc/scalar type information from the file(path) name
     scalars = [ (path,
-        resolve(re.search(r'tw[0-9]+',path)),
-        resolve(re.search(r'\.s[0-9]+\.',path)).strip('.').strip('s'),
+        resolve(re.search(r'tw[0-9]+', path)),
+        resolve(re.search(r'\.s[0-9]+\.', path)).strip('.').strip('s'),
         #re.search(r'\.[a-z]\.dat',path)[0].strip('.dat').strip('.'))
         resolve(re.search(r'(\.[a-z]+)(?=\.dat)', path)).strip('.'))
             for path in os.listdir('.')
-            for filename in filenames if filename in path ]
+            for filename in filenames if filename == path ]
+    # sort by series, then twist
     scalars.sort(key=lambda x: x[2])
     scalars.sort(key=lambda x: x[1])
     if not scalars:
         raise StopIteration(','.join(sys.argv[1:])+' not found')
     # input file validation
+    # only use the specified file iff the first line is a comment line (which contains data column labels)
     headers = []
     for scalar in scalars:
         with open(scalar[0]) as quantity_file:
             headers.append( [ line for line in quantity_file.readlines() if re.match("#.*", line) ] )
-    # if input files are similar, should collapse to only single element
+    # compare input files's header (first commented line)
+    # if input files are similar, this should collapse to only single element
     set_of_quantities = set([ x for header in headers for x in header ])
     if len(set_of_quantities) == 1:
         quantities = [ quant for quant in re.split(r'\s+', list(set_of_quantities)[0]) if not '#' in quant ]
@@ -54,7 +67,9 @@ except StopIteration as si:
 #    exit()
 
 # read energy or other quantities
-quantity = int(input('Please choose quantity: {}'.format(' '.join([ '({}){}'.format(str(counter), item) for counter, item in enumerate(quantities) ]))))
+quantity = int(parsed.quantities)
+if not quantity:
+    quantity = int(input('Please choose quantity: {}'.format(' '.join([ '({}){}'.format(str(counter), item) for counter, item in enumerate(quantities) ]))))
 
 # remember that this is already sorted
 for scalar in scalars:
