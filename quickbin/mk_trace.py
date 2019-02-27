@@ -12,7 +12,7 @@ import sys
 import numpy as np
 import re
 import argparse
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 # TODO: multiple quantities
@@ -22,6 +22,8 @@ parsed = parser.parse_args()
 
 scalars = None
 quantities = None
+# "quantity list", yet actually a dictionary
+# contains selected quantity at each twists
 qlist = {}
 try:
     filenames = parsed.files
@@ -38,12 +40,12 @@ try:
         #re.search(r'\.[a-z]\.dat',path)[0].strip('.dat').strip('.'))
         resolve(re.search(r'(\.[a-z]+)(?=\.dat)', filename)).strip('.'))
             for filename in filenames if any(path == filename for path in os.listdir('.')) ]
-    # sort by series, then twist
-    scalars.sort(key=lambda x: x[2])
-    scalars.sort(key=lambda x: x[1])
     if not scalars:
         raise StopIteration(','.join(sys.argv[1:])+' not found')
-    # input file validation
+    # sort by series, then twist
+    # this way the results will be grouped by twist, all of which series-ordered
+    scalars.sort(key=lambda x: x[2])
+    scalars.sort(key=lambda x: x[1])
     # only use the specified file iff the first line is a comment line (which contains data column labels)
     headers = []
     for scalar in scalars:
@@ -66,16 +68,18 @@ except StopIteration as si:
 #    exit()
 
 # read energy or other quantities
-quantity = int(parsed.quantities)
+# the column index for the data read
+quantity = int(parsed.quantities) if parsed.quantities else None
 if not quantity:
     quantity = int(input('Please choose quantity: {}'.format(' '.join([ '({}){}'.format(str(counter), item) for counter, item in enumerate(quantities) ]))))
 
 # remember that this is already sorted
+# scalar: the meta-file thing
 for scalar in scalars:
-    data_file = scalar[0]
+    data_file = scalar[0] # *filename*
     twist = scalar[1]
     series = scalar[2]
-    kind = scalar[3]
+    kind = scalar[3] # dmc/scalar
     try:
         qlist[twist].extend( [ line.split()[quantity]
             for line in open(data_file).readlines()
@@ -106,12 +110,15 @@ else:
     exit()
 label = '_'.join(label_list)
 
-# x axis and listification
-max_length = max([ len(qlist[key]) for key in qlist.keys() ])
+# create 'x' axis and listification
+max_length = max([ len(qlist[twist]) for twist in qlist.keys() ])
 x = list(np.arange(max_length))
 
-squarelist = [ qlist[key] for key in sorted(qlist.keys()) ]
+# "square" means, containing sublist of selected quantity of each twist
+# [ [tw0] [tw1] ... [twn] ] -> finally, [ [x] [tw0] [tw1] ... [twn] ]
+squarelist = [ qlist[twist] for twist in sorted(qlist.keys()) ]
 squarelist.insert(0,x)
+# at this point it has
 
 # fill with nan for empty series
 for sublist in squarelist:
@@ -120,7 +127,12 @@ for sublist in squarelist:
         sublist.extend([float('nan')] * diff)
 
 # change column to row
+# [[ x0 tw0 tw1 ]
+# [ x1 tw0 tw1 ]
+# ...
+# [ xm tw0 tw1 ]]
 squarelist = np.matrix.transpose(np.array(squarelist))
+
 
 
 # header (line 1: column labels; line 2: quantity)
