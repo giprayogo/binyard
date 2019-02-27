@@ -12,7 +12,9 @@ import sys
 import numpy as np
 import re
 import argparse
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib import pyplot as plt
 
 parser = argparse.ArgumentParser()
 # TODO: multiple quantities
@@ -125,15 +127,14 @@ for sublist in squarelist:
     diff = max_length - len(sublist)
     if diff:
         sublist.extend([float('nan')] * diff)
-
+plt.plot(np.array(squarelist[0]), np.array(squarelist[1], dtype=float))
+plt.show()
 # change column to row
 # [[ x0 tw0 tw1 ]
 # [ x1 tw0 tw1 ]
 # ...
 # [ xm tw0 tw1 ]]
 squarelist = np.matrix.transpose(np.array(squarelist))
-
-
 
 # header (line 1: column labels; line 2: quantity)
 header = '#'
