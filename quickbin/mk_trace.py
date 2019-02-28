@@ -127,7 +127,8 @@ for sublist in squarelist:
     diff = max_length - len(sublist)
     if diff:
         sublist.extend([float('nan')] * diff)
-plt.plot(np.array(squarelist[0]), np.array(squarelist[1], dtype=float))
+for twist in sorted(qlist.keys()):
+    plt.plot(x, np.array(qlist[twist], dtype=float))
 plt.show()
 # change column to row
 # [[ x0 tw0 tw1 ]
