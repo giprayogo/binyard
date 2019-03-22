@@ -91,7 +91,7 @@ def get_xmlelement_from_obj(tree, objString):
         else:
             tmproot = root.findall(tag)
             if tmproot:
-                if isinstance(tmproot, (list,)): # either N-element, N > 1, or empty list
+                if isinstance(tmproot, (list,)):
                     sys.exit('There are {} elements with \'{}\' tag'.format(len(tmproot), tag))
             else: # no child with tag; possibly reffering to an attribute
                 attrib = root.attrib
@@ -99,7 +99,7 @@ def get_xmlelement_from_obj(tree, objString):
                     return attrib[tag]
                 else:
                     sys.exit('No attribute or elements under {} with the name of {}'.format(root, tag))
-                root = root.findall(tag) #this thing can also be a list
+            root = root.findall(tag)
     return root
 
 
@@ -226,10 +226,10 @@ def parse_pwx2(open_file):
     return fromstring_pwx(open_file.read())
 
 
-#TODO: recognize comman (,) separated input as newline
 def fromstring_pwx(string):
     """Return list of pw.x input parameters"""
     parsed = {}
+    # only accepts valid pw.x card and namelist names
     #Flags TODO: unified flag
     namelist_flag = { 'control'  : None,
                        'system'   : None,
@@ -240,10 +240,9 @@ def fromstring_pwx(string):
                    'atomic_positions': None,
                    'k_points'        : None,
                    'cell_parameters' : None,
-                   'occupations'     : None,
+                   #'occupations'     : None,
                    'constraints'     : None,
                    'atomic_forces'   : None }
-    namelist_stop = re.compile('\s*/\s*')
     quoted = re.compile('\'.*\'')
 
     def set_namelist(key):
@@ -254,11 +253,12 @@ def fromstring_pwx(string):
         for k in card_flag.keys():
             card_flag[k] = True if k == key else False
 
-    def get_namelist_start(line):
+    def get_namelistheader(line):
         for k in namelist_flag.keys():
             if '&'+k in line.lower():
                 return k
         return False
+    namelist_stop = re.compile('\s*/\s*')
 
     def get_cardheader(line):
         for k in card_flag.keys():
@@ -266,11 +266,16 @@ def fromstring_pwx(string):
                 return k
         return False
 
+    #comment = re.compile(r'%.*')
+    #def get_comment(line):
+    #    return re.search(comment, line) if 
 
+
+    # Loop over all lines in input file
     # Split string on newlines and comma
     for i, line in enumerate(( l for l in re.split(r'[\n,]', string) if l )):
         # Control lines
-        namelist = get_namelist_start(line)
+        namelist = get_namelistheader(line)
         card = get_cardheader(line)
         if namelist:
             # Set flag
@@ -293,6 +298,7 @@ def fromstring_pwx(string):
                 # no options, put empty string
                 parsed[card]['options'] = ''
             continue # Go to next line
+
         # Read namelist/card contents
         # TODO: switch based on in namelist or card
         # Loop over all possible namelist (prevent including sporadic one)
@@ -356,7 +362,7 @@ def tostring_pwx(dictionary):
                   'atomic_positions': 7,
                   'k_points'        : 8,
                   'cell_parameters' : 9,
-                  'occupations'     : 10,
+                  #'occupations'     : 10, # temporary fix
                   'constraints'     : 11,
                   'atomic_forces'   : 12 }
         if (attribute['type'] == 'name'):
@@ -388,7 +394,7 @@ def tostring_pwx(dictionary):
                   'atomic_positions': 2,
                   'k_points'        : 3,
                   'cell_parameters' : 4,
-                  'occupations'     : 5,
+            #      'occupations'     : 5,
                   'constraints'     : 6,
                   'atomic_forces'   : 7 }
         return order[key]
