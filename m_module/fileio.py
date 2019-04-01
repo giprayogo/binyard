@@ -275,6 +275,7 @@ def fromstring_pwx(string):
     # Split string on newlines and comma
     for i, line in enumerate(( l for l in re.split(r'[\n,]', string) if l )):
         # Control lines
+        # TODO: revise this algorithm
         namelist = get_namelistheader(line)
         card = get_cardheader(line)
         if namelist:
@@ -298,6 +299,14 @@ def fromstring_pwx(string):
                 # no options, put empty string
                 parsed[card]['options'] = ''
             continue # Go to next line
+
+        #TODO: add special sections for empty line and commments
+        if re.match(r'^\s*[\#\!]', line) or re.match(r'^\s*$', line):
+            try:
+                parsed['misc'].append((i, line))
+            except KeyError:
+                parsed['misc'] = []
+            continue
 
         # Read namelist/card contents
         # TODO: switch based on in namelist or card
