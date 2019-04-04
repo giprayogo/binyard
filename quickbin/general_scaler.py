@@ -2,18 +2,25 @@
 
 import sys
 import re
+import argparse
 from fractions import Fraction
 from decimal import Decimal
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-f', '--filename', required=True)
+parser.add_argument('-c', '--column', required=True)
+parser.add_argument('-m', '--multiplier', required=True)
+parsed = parser.parse_args()
+
 try:
-    filename = sys.argv[1]
-    columns = list(map(int,sys.argv[2].split(',')))
+    filename = parsed.filename
+    columns = list(map(int,parsed.column.split(',')))
 except IndexError:
     print("Usage: () FILENAME COLUMN MULTIPLIER".format(sys.argv[0]))
     exit()
 
 try:
-    multiplier = Decimal(float(Fraction(sys.argv[3])))
+    multiplier = Decimal(float(Fraction(parsed.multiplier)))
 except IndexError:
     print("Usage: () FILENAME COLUMN MULTIPLIER/DIVIDER_COLUMN_INDEX(c[idx])".format(sys.argv[0]))
     exit()
@@ -21,7 +28,7 @@ except ValueError:
     # perhaps is using some symbol
     multiplier = False
     # TODO: make a more geneal implementation
-    multiplier_index = int(sys.argv[3].replace('c',''))
+    multiplier_index = int(parsed.multiplier.replace('c',''))
 
 
 with open(filename, 'r') as data_file:
