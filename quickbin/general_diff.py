@@ -1,20 +1,18 @@
 #!/usr/bin/env python
 
-import sys
 import math
+import argparse
 from fractions import Fraction
 
-try:
-    filename = sys.argv[1]
-    columns = list(map(int,sys.argv[2].split(',')))
-except IndexError:
-    #TODO: more general format
-    print("Usage: () FILENAME COLUMN [ERR_COLUMN]".format(sys.argv[0]))
-    exit()
-try:
-    err_columns = list(map(int,sys.argv[3].split(',')))
-except IndexError:
-    err_columns = None
+parser = argparse.ArgumentParser()
+parser.add_argument('filename')
+parser.add_argument('--column', '-c', required=True)
+parser.add_argument('--error-column', '-e')
+args = parser.parse_args()
+
+filename = args.filename
+columns = list(map(int, args.column.split(',')))
+err_columns = list(map(int, args.error_column.split(','))) if args.error_column else None
 
 with open(filename, 'r') as data_file:
     reference_data = {}
