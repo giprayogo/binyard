@@ -117,15 +117,27 @@ sic_ring_r_norm = normalize(sic_ring_r)
 
 #----------------------------------------------
 # adsorption geometry calculations
+def getRmatrix(angle, axis):
+    assert len(axis) ==3
+    # angle in rad
+    return np.cos(angle)*np.identity(3) + np.sin(angle)*np.array([
+        [       0, -axis[2],  axis[1]],
+        [ axis[2],        0, -axis[0]],
+        [-axis[1],  axis[0],        0]
+        ,]) + (1 - np.cos(angle))*np.outer(axis, axis)
+
 h_sic_axis = normalize(h_center[:-1] - sic_center[:-1])
 tilt = np.arccos(np.dot(h_sic_axis, np.array([-1.0, 0.0]))) #in radian
-tilt_matrix = np.array([ [np.cos(tilt),-np.sin(tilt),0.0], [np.sin(tilt),np.cos(tilt),0.0], [0.0,0.0,1.0]])
+#tilt_matrix = np.array([ [np.cos(tilt),-np.sin(tilt),0.0], [np.sin(tilt),np.cos(tilt),0.0], [0.0,0.0,1.0]])
+tilt_matrix = getRmatrix(tilt, [0.0, 0.0, 1.0])
+print(tilt_matrix)
 
 # cartesian x,y,z axes, tilted relative to the adsorbed hydrogen center
 # z is unecessary since 
 tilted_x = np.matmul( np.array([1.0,0.0,0.0]), tilt_matrix) #the surface normal
 tilted_y = np.matmul( np.array([0.0,1.0,0.0]), tilt_matrix) # the surface perpendicular
 tilted_z = np.matmul( np.array([0.0,0.0,1.0]), tilt_matrix)
+print(tilt_matrix)
 
 def degangle(v1, v2):
     return min(np.rad2deg(np.arccos(np.dot(v1, v2))), np.rad2deg(np.arccos(np.dot(v1, -v2))))
