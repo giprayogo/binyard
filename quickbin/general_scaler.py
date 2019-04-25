@@ -13,7 +13,6 @@ parser.add_argument('-c', '--column', required=True)
 parser.add_argument('-m', '--multiplier', required=True)
 args = parser.parse_args()
 
-<<<<<<< HEAD
 # because the Fraction library does not support decimal denumerator things
 def s2float(string):
     return reduce(lambda x,y: x/y, [ float(x) for x in string.split('/') ])
@@ -23,15 +22,6 @@ columns = list(map(int, args.column.split(',')))
 
 # make more sense for the purpose
 if 'c' in args.multiplier:
-=======
-filename = args.filename
-columns = list(map(int, args.column.split(',')))
-
-try:
-    multiplier = Decimal(float(Fraction(args.multiplier)))
-except ValueError:
-    # perhaps is using some symbol
->>>>>>> cdf8d0f715f7748fb6bb5a005cee77b66a1db157
     multiplier = False
     multiplier_index = int(args.multiplier.replace('c',''))
 else:
@@ -39,6 +29,7 @@ else:
 
 #1/c0 is *1 *1/c0, c0 is a var
 #split[column] = Decimal(split[column]#)
+
 
 
 with open(filename, 'r') as data_file:
