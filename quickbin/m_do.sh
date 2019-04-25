@@ -10,6 +10,6 @@
 [ -z "$1" ] && { echo "usage: ${0##*/} FILES/DIRS* COMMAND"; exit; }
 for file in "${@:1:(($#-1))}"
 do
- [ -d $file ] && { cwd=$(pwd); cd $file; bash -c "${@: -1}"; cd $cwd; }
- [ -f $file ] && bash -c "${@: -1} $file"
+ [ -d $file ] && { cwd=$(pwd); cd $file; (eval "${@: -1}"); cd $cwd; }
+ [ -f $file ] && (eval "${@: -1} $file")
 done
