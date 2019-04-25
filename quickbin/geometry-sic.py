@@ -74,11 +74,11 @@ def degangle(v1, v2):
     return min(np.rad2deg(np.arccos(np.dot(v1, v2))), np.rad2deg(np.arccos(np.dot(v1, -v2))))
 
 # x-y radius
-def get_mean_radii(position_list):
+def mean_radii(position_list):
     #return sum([ np.linalg.norm(x[:-1] - sic_center[:-1]) for x in position_list ]) / len(position_list)
     return np.array([ np.linalg.norm(x[:-1] - sic_center[:-1]) for x in position_list ]).mean()
 
-def get_var_radii(position_list):
+def var_radii(position_list):
     return np.array([ np.linalg.norm(x[:-1] - sic_center[:-1]) for x in position_list ]).var()
 
 
@@ -94,11 +94,11 @@ d_bonds_r = list(map(lambda y: np.linalg.norm(y) * alat2angstrom,
         and np.isclose(degangle(normalize(x), np.array([0, 0, 1])), D_BOND_ANGLE, atol=10.0),
             bonds)))
 
-si_r_ave = get_mean_radii(si_atoms) * alat2angstrom
-c_r_ave = get_mean_radii(c_atoms) * alat2angstrom
+si_r_ave = mean_radii(si_atoms) * alat2angstrom
+c_r_ave = mean_radii(c_atoms) * alat2angstrom
 buckling = si_r_ave - c_r_ave
-si_r_sigma = get_var_radii(si_atoms) * alat2angstrom
-c_r_sigma = get_var_radii(c_atoms) * alat2angstrom
+si_r_sigma = var_radii(si_atoms) * alat2angstrom
+c_r_sigma = var_radii(c_atoms) * alat2angstrom
 
 def get_energy(out_file):
     with open(out_file, 'r') as fh:
@@ -118,6 +118,7 @@ if not args.table:
     print("---------------------------")
 else:
     if not args.no_header:
-        print('#DIR Si-C Si-C(P) Si-C(D) R_Si S_Si R_C S_C\n')
+        print('#DIR bond lengths              radius            E')
+        print('#    all  para/perp  diagonal  Si  Si_v  C  C_v')
     print(' '.join(map(str,
         [os.getcwd(), average(bonds_r), average(p_bonds_r), average(d_bonds_r), si_r_ave, si_r_sigma, c_r_ave, c_r_sigma, buckling, get_energy(args.out_file)])))
