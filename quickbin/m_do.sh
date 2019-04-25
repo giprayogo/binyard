@@ -1,6 +1,7 @@
 #!/bin/bash -i
 # exec command (last arg) on each dir (other args)
 # (for doing equivalent to e.g. tossall, fetchall)
+# 2019/04/25: Change pattern for file handling; instead access filename from variable $file
 # 2019/04/23: Use subshell by replacing eval with bash -c
 # 2019/04/23: Finally found suitable implementation
 # 2019/04/23: Revert to directory limit; some generalization is required for file operations
@@ -10,5 +11,5 @@
 for file in "${@:1:(($#-1))}"
 do
  [ -d $file ] && { cwd=$(pwd); cd $file; (eval "${@: -1}"); cd $cwd; }
- [ -f $file ] && (eval "${@: -1} $file")
+ [ -f $file ] && (eval "${@: -1}")
 done
