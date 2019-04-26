@@ -4,6 +4,7 @@ import m_module.fileio as fileio
 
 import argparse
 import numpy as np
+import os
 
 np.set_printoptions(precision=15) # match QE printed precision
 
@@ -15,10 +16,18 @@ def normalize(vector):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('pwx_input_file')
-parser.add_argument('--pwx-site-file', '-f', type=str, help='Used when optimized geometry shifted far from the initial site')
-parser.add_argument('--site', '-s', type=str, required=True, choices=['hollow', 'bridge', 'top'], help='Adsorption site')
-parser.add_argument('--table', '-t', action='store_true', help='Print in mergeable format')
-#parser.add_argument('--out', action='store_true', required=True) # read output file also; not implemented
+parser.add_argument('--pwx-site-file', '-f',
+        required=True,
+        type=str,
+        help='Reference initial geometry. Pre-optimization')
+parser.add_argument('--site', '-s',
+        type=str, required=True,
+        choices=['hollow', 'bridge', 'top'],
+        help='Adsorption site')
+parser.add_argument('--table', '-t', action='store_true',
+        help='Print in mergeable format')
+parser.add_argument('--out-file', '-o', required=True)
+parser.add_argument('--no-header', '-n', action='store_true')
 args = parser.parse_args()
 pwi = fileio.parse_pwx(args.pwx_input_file)
 
@@ -70,15 +79,22 @@ si_center = sum(si_atoms) / len(si_atoms)
 c_center = sum(c_atoms) / len(c_atoms)
 
 #TODO; tidy up
-if args.pwx_site_file:
-    original_pwi = fileio.parse_pwx(args.pwx_site_file)
-    original_atom_species_array = np.array( [ single_atom[0]
-        for single_atom in original_pwi['atomic_positions']['value'] ] , dtype='S')
-    original_atom_position_array = toalatifcrystal(np.array( [ single_atom[1:]
-        for single_atom in original_pwi['atomic_positions']['value'] ] , dtype='f8'))
-    original_h_atoms = [ v for i, v in enumerate(original_atom_position_array) if original_atom_species_array[i] == b'H' ]
-    assert len(h_atoms) != 0
-    original_h_center = sum(original_h_atoms) / len(original_h_atoms)
+original_pwi = fileio.parse_pwx(args.pwx_site_file)
+original_atom_species_array = np.array( [ single_atom[0]
+    for single_atom in original_pwi['atomic_positions']['value'] ] , dtype='S')
+original_atom_position_array = toalatifcrystal(np.array( [ single_atom[1:]
+    for single_atom in original_pwi['atomic_positions']['value'] ] , dtype='f8'))
+original_h_atoms = [ v for i, v in enumerate(original_atom_position_array) if original_atom_species_array[i] == b'H' ]
+original_sic_atoms  = [ v for i, v in enumerate(original_atom_position_array) if original_atom_species_array[i] == b'Si' or original_atom_species_array[i] == b'C' ]
+assert len(h_atoms) != 0
+original_h_center = sum(original_h_atoms) / len(original_h_atoms)
+original_sic_center = sum(original_sic_atoms) / len(original_sic_atoms)
+
+# yeah; I know it is a one-liner
+def relative(r, r0):
+    return r-r0
+
+metric = np.linalg.norm(relative(h_center, sic_center) - relative(original_h_center, original_sic_center))
 
 # finding H center's nearest neighbors list
 # the goal is to find the Si-C hexagonal 'ring'
@@ -104,16 +120,12 @@ def pbc_copy(position_list):
     position_list.extend(copies_list)
     return position_list
 
-if args.pwx_site_file:
-    sic_ring = pbc_copy(nn(original_h_center, sic_atoms, HALF_RING_SIZE[args.site] ))
-else:
-    sic_ring = pbc_copy(nn(h_center, sic_atoms, HALF_RING_SIZE[args.site] ))
+sic_ring = pbc_copy(nn(original_h_center, sic_atoms, HALF_RING_SIZE[args.site] ))
 #print(sic_ring)
 assert len(sic_ring) == RING_SIZE[args.site] # make sure it properly detects all Si-C ring
 sic_ring_center = sum(sic_ring) / len(sic_ring)
 sic_ring_r = sic_ring_center[:-1] - sic_center[:-1]
 sic_ring_r_norm = normalize(sic_ring_r)
-
 
 #----------------------------------------------
 # adsorption geometry calculations
@@ -127,26 +139,32 @@ def getRmatrix(angle, axis):
         ,]) + (1 - np.cos(angle))*np.outer(axis, axis)
 
 h_sic_axis = normalize(h_center[:-1] - sic_center[:-1])
+# negative here is -very- important, because of the quadrant where I put the H2.
+# ideally it should self-identify which one to be used but then I don't want to spend the time
 tilt = np.arccos(np.dot(h_sic_axis, np.array([-1.0, 0.0]))) #in radian
 #tilt_matrix = np.array([ [np.cos(tilt),-np.sin(tilt),0.0], [np.sin(tilt),np.cos(tilt),0.0], [0.0,0.0,1.0]])
 tilt_matrix = getRmatrix(tilt, [0.0, 0.0, 1.0])
-print(tilt_matrix)
+#print(tilt_matrix)
 
 # cartesian x,y,z axes, tilted relative to the adsorbed hydrogen center
-# z is unecessary since 
+# z is unecessary since
 tilted_x = np.matmul( np.array([1.0,0.0,0.0]), tilt_matrix) #the surface normal
 tilted_y = np.matmul( np.array([0.0,1.0,0.0]), tilt_matrix) # the surface perpendicular
 tilted_z = np.matmul( np.array([0.0,0.0,1.0]), tilt_matrix)
-print(tilt_matrix)
+#print(tilt_matrix)
 
 def degangle(v1, v2):
     return min(np.rad2deg(np.arccos(np.dot(v1, v2))), np.rad2deg(np.arccos(np.dot(v1, -v2))))
 
 # vector between H atoms
 h_axis = normalize(h_atoms[0] - h_atoms[1]) # in alat; careful for z shift
-h_surface_angle = degangle(h_axis, tilted_y)
-h_twist_angle = np.rad2deg(np.arccos(np.dot(h_axis, tilted_z)))
-h_ring_angle = np.rad2deg(np.arccos(np.dot(h_sic_axis, sic_ring_r_norm)))
+
+# switch to normal (netgative tilted x)
+#h_surface_angle = degangle(h_axis, tilted_y)
+h_surface_angle = degangle(h_axis, -tilted_x)
+# also this one matches y better
+#h_twist_angle = np.rad2deg(np.arccos(np.dot(h_axis, tilted_z)))
+h_twist_angle = np.rad2deg(np.arccos(np.dot(h_axis, tilted_y)))
 
 # x-y radius
 def get_mean_radii(position_list):
@@ -156,6 +174,11 @@ def get_mean_radii(position_list):
 si_r_ave = get_mean_radii(si_atoms)
 c_r_ave = get_mean_radii(c_atoms)
 
+def get_energy(out_file):
+    with open(out_file, 'r') as fh:
+        return [ line for line in fh if '!' in line ][-1].split()[4]
+
+#TODOL can these be shortened?
 if not args.table:
     # coordinates for recheck
     print("SiCNT center coordinate (Å): {}".format(sic_center * alat2angstrom))
@@ -173,23 +196,17 @@ if not args.table:
     # angles
     print("H2 to surface normal angle [deg]: {}".format(h_surface_angle))
     print("H2 to cylinder axis angle [deg]: {}".format(h_twist_angle))
-    print("H2 centroid to site center shift angle [deg]: {}".format(h_ring_angle))
+    print("H2 shift from original location (Å) {}".format(metric * alat2angstrom))
+    print("SCF energy [Ry]: {}".format(h_twist_angle))
 else:
     # TODO: fix copy pastes
     h_center_r = np.linalg.norm(h_center[:-1] - sic_center[:-1])
-    #print('# H2-SiCNT center ; Si_R           ; C_R           ; H2-SiCNT surface ; H-S surface angle ; H-S z-angle       ; H-S ads. angle')
-    #print("{} {} {} {} {} {} {}".format(
-    #    h_center_r * alat2angstrom,
-    #    si_r_ave * alat2angstrom,
-    #    c_r_ave * alat2angstrom,
-    #    alat2angstrom * (h_center_r - si_r_ave) if si_r_ave > c_r_ave else alat2angstrom * (h_center_r - c_r_ave),
-    #    h_surface_angle,
-    #    h_twist_angle,
-    #    h_ring_angle))
-    print('#H2-SiCNT surface ; H-S surface angle ; H-S z-angle       ; H-S ads. angle')
-    print("{} {} {} {}".format(
+    if not args.no_header:
+        print('#surface distance; surface angle; axis angle; shift; SCF energy')
+    print(*[
+        os.getcwd(),
         alat2angstrom * (h_center_r - si_r_ave) if si_r_ave > c_r_ave else alat2angstrom * (h_center_r - c_r_ave),
         h_surface_angle,
         h_twist_angle,
-        h_ring_angle,
-        energy))
+        metric * alat2angstrom,
+        get_energy(args.out_file) ])
