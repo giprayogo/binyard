@@ -5,6 +5,7 @@ import numpy as np
 import subprocess
 from subprocess import Popen,PIPE
 
+
 qmca = '/mnt/lustre/applications/qmcpack/nexus/executables/qmca'
 #some sort of struct of arrays
 class Averaged:
