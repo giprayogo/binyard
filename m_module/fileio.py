@@ -7,7 +7,7 @@ import fnmatch
 import re
 import time
 
-import scandir
+#import scandir
 import xml.etree.ElementTree as ET
 import collections
 
@@ -28,7 +28,8 @@ def listdirwith(*filename_pattern_list, path='.'):
         return True
 
     return [ dirpath
-        for dirpath,dirnames,filenames in scandir.walk(path)
+        #for dirpath,dirnames,filenames in scandir.walk(path)
+        for dirpath,dirnames,filenames in os.walk(path)
         if files_are_there(filenames)
         and not 'rubbish' in dirpath ]
 
@@ -79,10 +80,12 @@ def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, defaul
             return e
 
 
-# Useful for getting elements from qmcpack's xml
+# Useful for getting elements from qmcpack's xml (but I'm no longer sure how)
+# always return a list except when "tree" is an attrib
 def get_xmlelement_from_obj(tree, objString):
+    """ Return the value (in a list) of a unique xml element or attribute
+        from a tree with the specified objString, raise exception otherwise """
     objtags = objString.split('.')
-    #return root.findall(objString)
     root = tree.getroot()
     for tag in objtags:
         if '[' in tag or ']' in tag:
@@ -91,7 +94,7 @@ def get_xmlelement_from_obj(tree, objString):
         else:
             tmproot = root.findall(tag)
             if tmproot:
-                if isinstance(tmproot, (list,)): # either N-element, N > 1, or empty list
+                if len(tmproot) > 1:
                     sys.exit('There are {} elements with \'{}\' tag'.format(len(tmproot), tag))
             else: # no child with tag; possibly reffering to an attribute
                 attrib = root.attrib
@@ -99,7 +102,7 @@ def get_xmlelement_from_obj(tree, objString):
                     return attrib[tag]
                 else:
                     sys.exit('No attribute or elements under {} with the name of {}'.format(root, tag))
-                root = root.findall(tag) #this thing can also be a list
+            root = tmproot #this thing can also be a list
     return root
 
 
