@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-# Script to copy geometry from for example, cif2cell generated pw.x
-# partial input file into a template file containing all simulation parameters
-# TODO: tidy up and merge into quickbin
+# Merge geometry and run parrameters from 2 different pw.x input files
 
 import os
 import numpy as np
@@ -23,21 +21,15 @@ parser.add_argument('-t', '--template-file', required=True,
 parser.add_argument('-s', '--structure-file', required=True,
         help='pw.x input file with final structure')
 
-parsed = parser.parse_args()
-template = parsed.template_file
-structure = parsed.structure_file
+args = parser.parse_args()
 
-pwi = fileio.parse_pwx(template)
-pws = fileio.parse_pwx(structure)
+template = fileio.parse_pwx(args.template_file)
+structure = fileio.parse_pwx(args.structure_file)
+template['celldm(1)']['value'] = structure['celldm(1)']['value']
+template['nat']['value'] = structure['nat']['value']
+template['ntyp']['value'] = structure['ntyp']['value']
+template['cell_parameters'] = structure['cell_parameters']
+template['atomic_positions'] = structure['atomic_positions']
+template['atomic_species'] =structure['atomic_species']
 
-# copy structure file parameters to template
-pwi['celldm(1)']['value'] = pws['celldm(1)']['value']
-pwi['nat']['value'] = pws['nat']['value']
-pwi['ntyp']['value'] = pws['ntyp']['value']
-pwi['cell_parameters']['value'] = pws['cell_parameters']['value']
-pwi['cell_parameters']['options'] = pws['cell_parameters']['options']
-pwi['atomic_positions']['value'] = pws['atomic_positions']['value']
-pwi['atomic_positions']['options'] = pws['atomic_positions']['options']
-#pwi['atomic_species'] = pws['atomic_species']
-
-print(fileio.tostring_pwx(pwi))
+print(fileio.tostring_pwx(template))
