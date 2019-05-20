@@ -103,7 +103,7 @@ def get_xmlelement_from_obj(tree, objString):
     return root
 
 
-def parse_casino(filename):
+def fromstring_casino(content):
     """ Input: casino input filepath, Output: Dictionary of casino keywords values """
     # Input format snippet :
     #ned               : 128            #*! Number of down electrons (Integer)
@@ -112,9 +112,6 @@ def parse_casino(filename):
     #%block npcell
     #4 4 1
     #%endblock npcell
-    casino_input = open(filename,'r')
-    content = casino_input.read()
-    casino_input.close()
     pattern_comment = re.compile(r'(?<=#).*$', re.MULTILINE)
     #key = re.compile(r'[a-zA-Z\_](?=\s*:)')
     #value = re.compile(r':')
@@ -154,20 +151,6 @@ def parse_casino(filename):
     print(parsed)
 
 
-#Copied from old parser.py lib
-def parse_pbs(filename):
-    with open(filename,'r') as pbs_file:
-        #string_list = [
-        #            v.split(' = ')
-        #            for v in ''.join(pbs_file.readlines())
-        #                .replace('\n\t','').replace('    ','')
-        #                .split('\n')
-        #                if ' = ' in v
-        #         ]
-        content = pbs_file.read()
-        return fromstring_pbs(content)
-
-
 def fromstring_pbs(string):
     string_list = [
             v.split(' = ')
@@ -177,11 +160,6 @@ def fromstring_pbs(string):
              (key,value)
              for (key,value) in string_list
              )
-
-
-def parse_bash(filename):
-    with open(filename, 'r') as fh:
-        return fromstring_bash(fh)
 
 
 def fromstring_bash(string, splitter=','):
@@ -195,42 +173,43 @@ def fromstring_bash(string, splitter=','):
              )
 
 
-#TODO:proper integration
-def parse_upf(filename):
-    with open(filename, 'r') as upf_file:
-        content = upf_file.read()
-        tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
-        parsed = {}
-        for match in re.finditer(tags,content):
-            tag = match.group(0)
-            parsed[tag] = []
-            regex = r'(?<=\<'+re.escape(tag)+r'\>)'+r'(.*?)(?=\<\/'+re.escape(tag)+'\>)'
-            #print('REGEX: '+regex)
-            block = re.compile(regex,re.DOTALL)
-            parsed[tag] = [ line
-                            for inner_match in re.finditer(block,content)
-                            for line in inner_match.group(0).split('\n') if line ]
-        return parsed
+def fromstring_upf(content):
+    tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
+    parsed = {}
+    for match in re.finditer(tags,content):
+        tag = match.group(0)
+        parsed[tag] = []
+        regex = r'(?<=\<'+re.escape(tag)+r'\>)'+r'(.*?)(?=\<\/'+re.escape(tag)+'\>)'
+        #print('REGEX: '+regex)
+        block = re.compile(regex,re.DOTALL)
+        parsed[tag] = [ line
+                        for inner_match in re.finditer(block,content)
+                        for line in inner_match.group(0).split('\n') if line ]
+    return parsed
 
 
 def parse_pwx(filename):
     """Return dictionary consisting pw.x input tags and their values"""
-    with open(filename, 'r') as pwx_file:
-        return fromstring_pwx(pwx_file.read())
+    # temporary glue for this method's users
+    print('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
+    return parse('pwx', filename)
 
 
 def parse(format, filename):
     parser = get_parser(format)
-    return parser(filename)
+    with open(filename, 'r') as fh:
+        return parser(fh.read())
 
 
 def get_parser(format):
     if format == 'pwx':
-        return parse_pwx
-    elif format == 'upf'
-        return parse_upf
-    elif format == 'bash'
-        return parse_bash
+        return fromstring_pwx
+    elif format == 'upf':
+        return fromstring_upf
+    elif format == 'bash':
+        return fromstring_bash
+    elif format == 'casino':
+        return fromstring_casino
     else:
         raise ValueError(format)
 
