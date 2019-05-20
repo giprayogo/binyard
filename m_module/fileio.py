@@ -18,7 +18,7 @@ def listdirwith(*filename_pattern_list, path='.'):
         Input   : root path, list of searched filename patterns;
         Output  : --list-- of directories under path containing filename_pattern_list"""
 
-    def files_are_there(filenames):
+    def _files_are_there(filenames):
         """ Test whether ALL pattern in filename_pattern_list exists in current dir's filenames """
         #for pattern in filename_pattern_list:
             # If no files in the directory match specified pattern, return false
@@ -29,7 +29,7 @@ def listdirwith(*filename_pattern_list, path='.'):
 
     return [ dirpath
         for dirpath,dirnames,filenames in scandir.walk(path)
-        if files_are_there(filenames)
+        if _files_are_there(filenames)
         and not 'rubbish' in dirpath ]
 
 
@@ -156,17 +156,16 @@ def parse_casino(filename):
 
 #Copied from old parser.py lib
 def parse_pbs(filename):
-    pbs_file = open(filename,'r')
-    #string_list = [
-    #            v.split(' = ')
-    #            for v in ''.join(pbs_file.readlines())
-    #                .replace('\n\t','').replace('    ','')
-    #                .split('\n')
-    #                if ' = ' in v
-    #         ]
-    content = pbs_file.read()
-    pbs_file.close()
-    return fromstring_pbs(content)
+    with open(filename,'r') as pbs_file:
+        #string_list = [
+        #            v.split(' = ')
+        #            for v in ''.join(pbs_file.readlines())
+        #                .replace('\n\t','').replace('    ','')
+        #                .split('\n')
+        #                if ' = ' in v
+        #         ]
+        content = pbs_file.read()
+        return fromstring_pbs(content)
 
 
 def fromstring_pbs(string):
@@ -180,8 +179,12 @@ def fromstring_pbs(string):
              )
 
 
-#def parse_bash(filename):
-def fromstring_bash(string,splitter=','):
+def parse_bash(filename):
+    with open(filename, 'r') as fh:
+        return fromstring_bash(fh)
+
+
+def fromstring_bash(string, splitter=','):
     string_list = [
             v.split('=')
             for v in string.split(splitter)
@@ -194,36 +197,42 @@ def fromstring_bash(string,splitter=','):
 
 #TODO:proper integration
 def parse_upf(filename):
-    upf_file = open(filename, 'r')
-    content = upf_file.read()
-    tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
-    parsed = {}
-    for match in re.finditer(tags,content):
-        tag = match.group(0)
-        parsed[tag] = []
-        regex = r'(?<=\<'+re.escape(tag)+r'\>)'+r'(.*?)(?=\<\/'+re.escape(tag)+'\>)'
-        #print('REGEX: '+regex)
-        block = re.compile(regex,re.DOTALL)
-        parsed[tag] = [ line
-                        for inner_match in re.finditer(block,content)
-                        for line in inner_match.group(0).split('\n') if line ]
-    return parsed
-    #upf_file.close()
-#TODO: make generic
+    with open(filename, 'r') as upf_file:
+        content = upf_file.read()
+        tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
+        parsed = {}
+        for match in re.finditer(tags,content):
+            tag = match.group(0)
+            parsed[tag] = []
+            regex = r'(?<=\<'+re.escape(tag)+r'\>)'+r'(.*?)(?=\<\/'+re.escape(tag)+'\>)'
+            #print('REGEX: '+regex)
+            block = re.compile(regex,re.DOTALL)
+            parsed[tag] = [ line
+                            for inner_match in re.finditer(block,content)
+                            for line in inner_match.group(0).split('\n') if line ]
+        return parsed
 
 
 def parse_pwx(filename):
-    """Input: filename, Return: dictionary of pwx input tags and their values"""
-    pwx_file = open(filename,'r')
-    content = pwx_file.read()
-    pwx_file.close()
-    return fromstring_pwx(content)
+    """Return dictionary consisting pw.x input tags and their values"""
+    with open(filename, 'r') as pwx_file:
+        return fromstring_pwx(pwx_file.read())
 
 
-def parse_pwx2(open_file):
-    """Input: pw.x input filehandle Output: dictionary of pw.x input tags"""
-    #TODO: make this default parse_pwx
-    return fromstring_pwx(open_file.read())
+def parse(format, filename):
+    parser = get_parser(format)
+    return parser(filename)
+
+
+def get_parser(format):
+    if format == 'pwx':
+        return parse_pwx
+    elif format == 'upf'
+        return parse_upf
+    elif format == 'bash'
+        return parse_bash
+    else:
+        raise ValueError(format)
 
 
 def fromstring_pwx(string):
