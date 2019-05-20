@@ -1,18 +1,8 @@
 #!/usr/bin/env python
 # Merge geometry and run parrameters from 2 different pw.x input files
 
-import os
-import numpy as np
-import sys
-import shutil
-import glob
-
 import argparse
-
 import m_module.fileio as fileio
-
-np.set_printoptions(precision=15)
-script = os.path.basename(__file__)
 
 # read input files
 parser = argparse.ArgumentParser()

@@ -17,14 +17,12 @@ def sort_by_series(x):
     return resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s')
 
 
+# divide files by number of twists
 scalar = {}
 for filename in parsed.files:
     twist = resolve(re.search(r'tw[0-9]+', filename))
-    try:
-        scalar[twist].append(filename)
-    except KeyError:
-        scalar[twist] = []
-        scalar[twist].append(filename)
+    scalar.setdefault(twist, [])
+    scalar[twist].append(filename)
 
 print(scalar)
 
