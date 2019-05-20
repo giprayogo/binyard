@@ -150,7 +150,7 @@ def nline(filename):
     with open(filename, 'r') as fh:
         return sum(1 for _ in fh)
 
-def check_nsample(filenames, target):
+def nsample(filenames):
     """Raise EnoughSampleError if target number of samples is satisfied;
        Otherwise return True"""
     #print(filenames)
@@ -164,9 +164,13 @@ def check_nsample(filenames, target):
         scalar[twist].setdefault('nline', 0)
         scalar[twist]['nline'] += nline(filename)
 
+    return [ x['nline'] for x in list(scalar.values()) ]
+
+
+def check_nsample(filenames, target):
     #print('---checking number of samples')
-    nlines = [ x['nline'] for x in list(scalar.values()) ]
-    if min(nlines) > target:
+    nsamples = nsample(filenames)
+    if min(nsamples) > target:
         raise EnoughSampleError
     #print('---insufficient number of samples')
     return True
