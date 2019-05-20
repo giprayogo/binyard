@@ -4,7 +4,6 @@
 import threading
 from threading import Timer
 import time
-import datetime
 import re
 import fnmatch
 import os
@@ -25,9 +24,22 @@ class EnoughSampleError(Exception):
 
 
 # Wrappers
+# TODO: move under debugging
 # Remember to RETURN the functions
 # only accept single *args!
 # default 'old' to be older than 1 hour
+def print_args(func):
+    def printed(*args, **kwargs):
+        print('function:{0}; args:{1}; kwargs{2}'.format(func.__name__, args, kwargs))
+        return func(*args, **kwargs)
+    return printed
+
+def timestamp(func):
+    def stamped(*args, **kwargs):
+        print(time.ctime())
+        return func(*args, **kwargs)
+    return stamped
+
 def not_old(_func=None, threshold=3600):
     def oldchecking(func):
         def oldchecked(*args, **kwargs):
@@ -42,13 +54,6 @@ def not_old(_func=None, threshold=3600):
         return oldchecking(_func)
 
 
-def print_args(func):
-    def printed(*args, **kwargs):
-        print('function: {0}'.format(func.__name__))
-        print('args: {0}'.format(args))
-        print('kwargs: {0}'.format(kwargs))
-        return func(*args, **kwargs)
-    return printed
 
 
 def latest(_=None, pattern=''):
@@ -108,25 +113,21 @@ class Autorunner():
         self.interval = interval
         if self.sensor():
             self.actuator()
-        print(datetime.datetime.now())
         print('waiting {0} seconds'.format(interval))
         threading.Timer(interval, self.run).start()
-        #print(datetime.datetime.now())
-        #print('waiting {0} seconds'.format(interval))
-
 
 def done_cobaltlog(filename):
-    print('cobalt log: {0}'.format(filename))
+    #print('cobalt log: {0}'.format(filename))
     with open(filename, 'r') as log:
         content = log.read()
-        jobid = re.search(r'(?<=jobid) [0-9]+', content)
-        print('Jobid: {0}'.format(jobid))
+        #jobid = re.search(r'(?<=jobid) [0-9]+', content).group()
+        #print('Jobid: {0}'.format(jobid))
 
         if 'task completed normally' in content:
             # completion signal
-            print('---task completed; checking return code')
+            #print('---task completed; checking return code')
             if 'exit code of 0' in content:
-                print('---exit code 0; continue')
+                #print('---exit code 0; continue')
                 return True
             else:
                 # always exit if exit code is not 0
@@ -135,7 +136,7 @@ def done_cobaltlog(filename):
         if 'maximum execution time exceeded' in content:
             raise JobTerminationError
 
-        print('---job still running; continue waiting')
+        #print('---job still running; continue waiting')
         return False
 
 
@@ -145,18 +146,15 @@ def resolve(regex_match):
         return regex_match.group(0)
     return ''
 
-
 def nline(filename):
     with open(filename, 'r') as fh:
         return sum(1 for _ in fh)
 
-
-@print_args
 def check_nsample(filenames, target):
     """Raise EnoughSampleError if target number of samples is satisfied;
        Otherwise return True"""
-    print(filenames)
-    
+    #print(filenames)
+
     scalar = {}
     for filename in filenames:
         twist = resolve(re.search(r'tw[0-9]+', filename))
@@ -166,9 +164,9 @@ def check_nsample(filenames, target):
         scalar[twist].setdefault('nline', 0)
         scalar[twist]['nline'] += nline(filename)
 
-    print('---checking number of samples')
+    #print('---checking number of samples')
     nlines = [ x['nline'] for x in list(scalar.values()) ]
     if min(nlines) > target:
         raise EnoughSampleError
-    print('---insufficient number of samples')
+    #print('---insufficient number of samples')
     return True

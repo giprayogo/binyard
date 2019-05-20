@@ -6,8 +6,6 @@ from autorunner import Autorunner
 import argparse
 import os
 import re
-#import time, threading
-#import datetime
 
 parser = argparse.ArgumentParser()
 parser.add_argument('cores')
@@ -21,27 +19,28 @@ core = parsed_args.cores
 realcp = parsed_args.realcplx
 prec = 'mp' if parsed_args.mixed_precision else ''
 
-OLD_THRESHOLD = 800000
+OLD_THRESHOLD = 80000000
 
 @autorunner.latest(pattern='*.cobaltlog')
 @autorunner.not_old(threshold=OLD_THRESHOLD)
+@autorunner.print_args
 def _job_finished(*args, **kwargs):
-    print('checked')
     return autorunner.done_cobaltlog(*args, **kwargs)
 
 @autorunner.dmc_dat(start=5)
+@autorunner.print_args
 def _enough_samples(*args, **kwargs):
     return autorunner.check_nsample(target=parsed_args.nsample, *args, **kwargs)
 
+@autorunner.print_args
 def _submit(inputs, core, realcp, prec):
     #find latest conts
     #with open('template', 'w') as fh:
     #    fh.write('\n'.join(inputs))
-    print('\n'.join(inputs))
+    #print('\n'.join(inputs))
     qsub = [ 'bgq_auto.sh', core, realcp, prec ]
-    print(' '.join(qsub))
+    #print(' '.join(qsub))
     #subprocess.call(qsub)
-
 
 def _sensor():
     if (_enough_samples() and _job_finished()):
@@ -49,6 +48,7 @@ def _sensor():
     else:
         return False
 
+@autorunner.timestamp
 def _actuator():
     cont_files = sorted([x for x in os.listdir('.') if 'cont.xml' in x ],
             key=lambda x: os.stat(x).st_mtime)
