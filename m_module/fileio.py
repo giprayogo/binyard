@@ -18,7 +18,7 @@ def listdirwith(*filename_pattern_list, path='.'):
         Input   : root path, list of searched filename patterns;
         Output  : --list-- of directories under path containing filename_pattern_list"""
 
-    def files_are_there(filenames):
+    def _files_are_there(filenames):
         """ Test whether ALL pattern in filename_pattern_list exists in current dir's filenames """
         #for pattern in filename_pattern_list:
             # If no files in the directory match specified pattern, return false
@@ -28,9 +28,8 @@ def listdirwith(*filename_pattern_list, path='.'):
         return True
 
     return [ dirpath
-        #for dirpath,dirnames,filenames in scandir.walk(path)
         for dirpath,dirnames,filenames in os.walk(path)
-        if files_are_there(filenames)
+        if _files_are_there(filenames)
         and not 'rubbish' in dirpath ]
 
 
@@ -127,7 +126,7 @@ def get_xmlelement_from_obj(element, objString):
            sys.exit('No attribute or elements under {} with the name of {}'.format(element, tag))
 
 
-def parse_casino(filename):
+def fromstring_casino(content):
     """ Input: casino input filepath, Output: Dictionary of casino keywords values """
     # Input format snippet :
     #ned               : 128            #*! Number of down electrons (Integer)
@@ -136,9 +135,6 @@ def parse_casino(filename):
     #%block npcell
     #4 4 1
     #%endblock npcell
-    casino_input = open(filename,'r')
-    content = casino_input.read()
-    casino_input.close()
     pattern_comment = re.compile(r'(?<=#).*$', re.MULTILINE)
     #key = re.compile(r'[a-zA-Z\_](?=\s*:)')
     #value = re.compile(r':')
@@ -178,21 +174,6 @@ def parse_casino(filename):
     print(parsed)
 
 
-#Copied from old parser.py lib
-def parse_pbs(filename):
-    pbs_file = open(filename,'r')
-    #string_list = [
-    #            v.split(' = ')
-    #            for v in ''.join(pbs_file.readlines())
-    #                .replace('\n\t','').replace('    ','')
-    #                .split('\n')
-    #                if ' = ' in v
-    #         ]
-    content = pbs_file.read()
-    pbs_file.close()
-    return fromstring_pbs(content)
-
-
 def fromstring_pbs(string):
     string_list = [
             v.split(' = ')
@@ -204,8 +185,7 @@ def fromstring_pbs(string):
              )
 
 
-#def parse_bash(filename):
-def fromstring_bash(string,splitter=','):
+def fromstring_bash(string, splitter=','):
     string_list = [
             v.split('=')
             for v in string.split(splitter)
@@ -216,10 +196,7 @@ def fromstring_bash(string,splitter=','):
              )
 
 
-#TODO:proper integration
-def parse_upf(filename):
-    upf_file = open(filename, 'r')
-    content = upf_file.read()
+def fromstring_upf(content):
     tags = re.compile(r'(?<=\<)([A-Za-z\_])+?(?=\>)') # <SOMETHING> pattern
     parsed = {}
     for match in re.finditer(tags,content):
@@ -232,28 +209,38 @@ def parse_upf(filename):
                         for inner_match in re.finditer(block,content)
                         for line in inner_match.group(0).split('\n') if line ]
     return parsed
-    #upf_file.close()
-#TODO: make generic
 
 
 def parse_pwx(filename):
-    """Input: filename, Return: dictionary of pwx input tags and their values"""
-    pwx_file = open(filename,'r')
-    content = pwx_file.read()
-    pwx_file.close()
-    return fromstring_pwx(content)
+    """Return dictionary consisting pw.x input tags and their values"""
+    # temporary glue for this method's users
+    print('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
+    return parse('pwx', filename)
 
 
-def parse_pwx2(open_file):
-    """Input: pw.x input filehandle Output: dictionary of pw.x input tags"""
-    #TODO: make this default parse_pwx
-    return fromstring_pwx(open_file.read())
+def parse(format, filename):
+    parser = get_parser(format)
+    with open(filename, 'r') as fh:
+        return parser(fh.read())
 
 
-#TODO: recognize comman (,) separated input as newline
+def get_parser(format):
+    if format == 'pwx':
+        return fromstring_pwx
+    elif format == 'upf':
+        return fromstring_upf
+    elif format == 'bash':
+        return fromstring_bash
+    elif format == 'casino':
+        return fromstring_casino
+    else:
+        raise ValueError(format)
+
+
 def fromstring_pwx(string):
     """Return list of pw.x input parameters"""
     parsed = {}
+    # only accepts valid pw.x card and namelist names
     #Flags TODO: unified flag
     namelist_flag = { 'control'  : None,
                        'system'   : None,
@@ -264,10 +251,9 @@ def fromstring_pwx(string):
                    'atomic_positions': None,
                    'k_points'        : None,
                    'cell_parameters' : None,
-                   'occupations'     : None,
+                   #'occupations'     : None,
                    'constraints'     : None,
                    'atomic_forces'   : None }
-    namelist_stop = re.compile('\s*/\s*')
     quoted = re.compile('\'.*\'')
 
     def set_namelist(key):
@@ -278,11 +264,12 @@ def fromstring_pwx(string):
         for k in card_flag.keys():
             card_flag[k] = True if k == key else False
 
-    def get_namelist_start(line):
+    def get_namelistheader(line):
         for k in namelist_flag.keys():
             if '&'+k in line.lower():
                 return k
         return False
+    namelist_stop = re.compile('\s*/\s*')
 
     def get_cardheader(line):
         for k in card_flag.keys():
@@ -290,11 +277,17 @@ def fromstring_pwx(string):
                 return k
         return False
 
+    #comment = re.compile(r'%.*')
+    #def get_comment(line):
+    #    return re.search(comment, line) if 
 
+
+    # Loop over all lines in input file
     # Split string on newlines and comma
     for i, line in enumerate(( l for l in re.split(r'[\n,]', string) if l )):
         # Control lines
-        namelist = get_namelist_start(line)
+        # TODO: revise this algorithm
+        namelist = get_namelistheader(line)
         card = get_cardheader(line)
         if namelist:
             # Set flag
@@ -317,6 +310,15 @@ def fromstring_pwx(string):
                 # no options, put empty string
                 parsed[card]['options'] = ''
             continue # Go to next line
+
+        #TODO: add special sections for empty line and commments
+        if re.match(r'^\s*[\#\!]', line) or re.match(r'^\s*$', line):
+            try:
+                parsed['misc'].append((i, line))
+            except KeyError:
+                parsed['misc'] = []
+            continue
+
         # Read namelist/card contents
         # TODO: switch based on in namelist or card
         # Loop over all possible namelist (prevent including sporadic one)
@@ -380,7 +382,7 @@ def tostring_pwx(dictionary):
                   'atomic_positions': 7,
                   'k_points'        : 8,
                   'cell_parameters' : 9,
-                  'occupations'     : 10,
+                  #'occupations'     : 10, # temporary fix
                   'constraints'     : 11,
                   'atomic_forces'   : 12 }
         if (attribute['type'] == 'name'):
@@ -412,7 +414,7 @@ def tostring_pwx(dictionary):
                   'atomic_positions': 2,
                   'k_points'        : 3,
                   'cell_parameters' : 4,
-                  'occupations'     : 5,
+            #      'occupations'     : 5,
                   'constraints'     : 6,
                   'atomic_forces'   : 7 }
         return order[key]
