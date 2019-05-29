@@ -13,8 +13,8 @@ parser.add_argument('-s', '--structure-file', required=True,
 
 args = parser.parse_args()
 
-template = fileio.parse_pwx(args.template_file)
-structure = fileio.parse_pwx(args.structure_file)
+template = fileio.parse('pwx', args.template_file)
+structure = fileio.parse('pwx', args.structure_file)
 template['celldm(1)']['value'] = structure['celldm(1)']['value']
 template['nat']['value'] = structure['nat']['value']
 template['ntyp']['value'] = structure['ntyp']['value']
