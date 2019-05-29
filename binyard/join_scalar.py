@@ -3,9 +3,14 @@ import re
 import sys
 import argparse
 #import numpy as np
+import autorunner
+
+@autorunner.dmc_dat()
+def common(x):
+    return x
 
 parser = argparse.ArgumentParser()
-parser.add_argument('files', nargs='+')
+parser.add_argument('files', nargs='*', default=common())
 parsed = parser.parse_args()
 
 def resolve(regex_match):
@@ -36,8 +41,8 @@ for twist in scalar.keys():
         out_string += header_ref.readlines()[0]
     for filename in filename_list:
         with open(filename, 'r') as something:
-            some_list = [ x for x in something.readlines() if not '#' in x ]
-            out_string += '\n'.join(some_list)
+            some_list = [ x.strip() for x in something.readlines() if not '#' in x ]
+            out_string += '\n'.join(some_list).strip() + '\n'
     with open(out_name, 'w') as something:
         something.write(out_string)
     print("written to: "+out_name)

@@ -69,8 +69,7 @@ if __name__ == '__main__':
 
     ## Make final.in out of updated positions in output file
     try:
-        with open(output_pathname, 'r') as output_file:#, \
-              #  open(input_pathname, 'r') as input_file:
+        with open(output_pathname, 'r') as output_file:
             try:
                 final_input = get_final_pwx_input(input_pathname, output_file)
             except AttributeError as e:
