@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import m_module.fileio as fileio
+import fileio
 
 import argparse
 import numpy as np

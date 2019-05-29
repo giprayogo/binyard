@@ -2,7 +2,7 @@
 # Merge geometry and run parrameters from 2 different pw.x input files
 
 import argparse
-import m_module.fileio as fileio
+import fileio
 
 # read input files
 parser = argparse.ArgumentParser()
