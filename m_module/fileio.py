@@ -7,7 +7,7 @@ import fnmatch
 import re
 import time
 
-import scandir
+#import scandir
 import xml.etree.ElementTree as ET
 import collections
 
@@ -28,7 +28,7 @@ def listdirwith(*filename_pattern_list, path='.'):
         return True
 
     return [ dirpath
-        for dirpath,dirnames,filenames in scandir.walk(path)
+        for dirpath,dirnames,filenames in os.walk(path)
         if _files_are_there(filenames)
         and not 'rubbish' in dirpath ]
 
@@ -78,29 +78,49 @@ def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, defaul
         if e:
             return e
 
+def split_count(indexed):
+    try:
+        tag, count = re.split(r'\[|\]', indexed)[:-1] #discard last element
+        count = int(count)
+    except ValueError:
+        tag = indexed
+        count = None
+    return (tag, count)
 
-# Useful for getting elements from qmcpack's xml
-def get_xmlelement_from_obj(tree, objString):
+# Useful for getting elements or attributes from qmcpack's xml
+# always return a list except when "tree" is an attrib
+# TODO: should return a list of matching objects, in case of multiple matches
+# sample objString: name.name.name
+def get_xmlelement_from_obj(element, objString):
+    """ Return the value (in a list) of a unique xml element or attribute
+        from a tree with the specified objString, raise exception otherwise """
     objtags = objString.split('.')
-    #return root.findall(objString)
-    root = tree.getroot()
-    for tag in objtags:
-        if '[' in tag or ']' in tag:
-            tagname, count = re.split(r'\[|\]', tag)[:-1] #discard last element
-            root = root.findall(tagname) [int(count)]
+    next_objString = '.'.join(objtags[1:])
+
+    tag, count = split_count(objtags[0])
+    child_elements = element.findall(tag)
+    if count is None:
+        if len(child_elements) > 1:
+            sys.exit('There are {} elements with \'{}\' tag'.format(len(child_elements), tag))
+        if child_elements:
+            child_element = child_elements[0]
         else:
-            tmproot = root.findall(tag)
-            if tmproot:
-                if isinstance(tmproot, (list,)):
-                    sys.exit('There are {} elements with \'{}\' tag'.format(len(tmproot), tag))
-            else: # no child with tag; possibly reffering to an attribute
-                attrib = root.attrib
-                if attrib[tag]: # indeed an attribute, return value immediately
-                    return attrib[tag]
-                else:
-                    sys.exit('No attribute or elements under {} with the name of {}'.format(root, tag))
-            root = root.findall(tag)
-    return root
+            try:
+                return element.attrib[tag]
+            except KeyError:
+                sys.exit('No attribute or elements under {} with the name of {}'.format(element, tag))
+    else:
+        child_element = child_elements[count]
+    if not child_element is None:
+        if next_objString:
+            return get_xmlelement_from_obj(child_element, next_objString)
+        else:
+            return child_element
+    else: # no child with tag; possibly reffering to an attribute
+        try:
+            return element.attrib[tag]
+        except KeyError:
+           sys.exit('No attribute or elements under {} with the name of {}'.format(element, tag))
 
 
 def fromstring_casino(content):
@@ -191,7 +211,7 @@ def fromstring_upf(content):
 def parse_pwx(filename):
     """Return dictionary consisting pw.x input tags and their values"""
     # temporary glue for this method's users
-    print('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
+    sys.stderr.write('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
     return parse('pwx', filename)
 
 
