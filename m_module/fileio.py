@@ -214,7 +214,7 @@ def fromstring_upf(content):
 def parse_pwx(filename):
     """Return dictionary consisting pw.x input tags and their values"""
     # temporary glue for this method's users
-    print('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
+    sys.stderr.write('parse_pwx(filename) is deprecated; consider using parse(\'pwx\', filename)')
     return parse('pwx', filename)
 
 
