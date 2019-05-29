@@ -40,7 +40,8 @@ def timestamp(func):
         return func(*args, **kwargs)
     return stamped
 
-def not_old(_func=None, threshold=3600):
+# the default walltime in bgq + some leeway
+def not_old(_func=None, threshold=7500):
     def oldchecking(func):
         def oldchecked(*args, **kwargs):
             mtime = os.stat(*args).st_mtime
@@ -162,7 +163,7 @@ def nsample(filenames):
         scalar[twist].setdefault('filenames', [])
         scalar[twist]['filenames'].append(filename)
         scalar[twist].setdefault('nline', 0)
-        scalar[twist]['nline'] += nline(filename)
+        scalar[twist]['nline'] += nline(filename) - 1 # the first line is a header TODO: proper header detection
 
     return [ x['nline'] for x in list(scalar.values()) ]
 
@@ -170,7 +171,7 @@ def nsample(filenames):
 def check_nsample(filenames, target):
     #print('---checking number of samples')
     nsamples = nsample(filenames)
-    if min(nsamples) > target:
+    if sum(nsamples) > target:
         raise EnoughSampleError
     #print('---insufficient number of samples')
     return True
