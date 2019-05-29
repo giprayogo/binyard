@@ -55,7 +55,7 @@ def get_final_pwx_input(input_file, output_file):
         final_coordinates = grep_final_coordinates(output_file)
     except AttributeError:
         raise
-    param = fileio.parse_pwx2(input_file)
+    param = fileio.parse('pwx', input_file)
     new_param = fileio.fromstring_pwx(final_coordinates)
     param['atomic_positions'] = new_param['atomic_positions']
     if param['calculation']['value'] == '\'vc-relax\'':
@@ -69,10 +69,10 @@ if __name__ == '__main__':
 
     ## Make final.in out of updated positions in output file
     try:
-        with open(output_pathname, 'r') as output_file, \
-                open(input_pathname, 'r') as input_file:
+        with open(output_pathname, 'r') as output_file:#, \
+              #  open(input_pathname, 'r') as input_file:
             try:
-                final_input = get_final_pwx_input(input_file, output_file)
+                final_input = get_final_pwx_input(input_pathname, output_file)
             except AttributeError as e:
                 print("%s: %s" % (sys.argv[0], e))
                 raise
