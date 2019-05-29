@@ -6,6 +6,7 @@ from autorunner import Autorunner
 import argparse
 import os
 import re
+import subprocess
 
 parser = argparse.ArgumentParser()
 parser.add_argument('cores')
@@ -22,7 +23,8 @@ prec = 'mp' if parsed_args.mixed_precision else ''
 OLD_THRESHOLD = 80000000
 
 @autorunner.latest(pattern='*.cobaltlog')
-@autorunner.not_old(threshold=OLD_THRESHOLD)
+#@autorunner.not_old(threshold=OLD_THRESHOLD)
+@autorunner.not_old()
 @autorunner.print_args
 def _job_finished(*args, **kwargs):
     return autorunner.done_cobaltlog(*args, **kwargs)
@@ -34,13 +36,11 @@ def _enough_samples(*args, **kwargs):
 
 @autorunner.print_args
 def _submit(inputs, core, realcp, prec):
-    #find latest conts
-    #with open('template', 'w') as fh:
-    #    fh.write('\n'.join(inputs))
-    #print('\n'.join(inputs))
+    with open('template', 'w') as fh:
+        fh.write('\n'.join(sorted(inputs)))
+        fh.write('\n')
     qsub = [ 'bgq_auto.sh', core, realcp, prec ]
-    #print(' '.join(qsub))
-    #subprocess.call(qsub)
+    subprocess.call(qsub)
 
 def _sensor():
     if (_enough_samples() and _job_finished()):
@@ -56,4 +56,5 @@ def _actuator():
     _submit([ x for x in cont_files if last_series in x ], core, realcp, prec)
 
 auto = Autorunner(sensor=_sensor, actuator=_actuator)
+_actuator()
 auto.run(interval=parsed_args.interval)
