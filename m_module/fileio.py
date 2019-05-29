@@ -87,18 +87,15 @@ def split_count(indexed):
         count = None
     return (tag, count)
 
-# Useful for getting elements from qmcpack's xml (but I'm no longer sure how)
+# Useful for getting elements or attributes from qmcpack's xml
 # always return a list except when "tree" is an attrib
-# TODO: should return a list of matching objects
+# TODO: should return a list of matching objects, in case of multiple matches
 # sample objString: name.name.name
 def get_xmlelement_from_obj(element, objString):
     """ Return the value (in a list) of a unique xml element or attribute
         from a tree with the specified objString, raise exception otherwise """
     objtags = objString.split('.')
     next_objString = '.'.join(objtags[1:])
-    #if not element:
-    #    print(element)
-    #    return element
 
     tag, count = split_count(objtags[0])
     child_elements = element.findall(tag)
@@ -111,7 +108,7 @@ def get_xmlelement_from_obj(element, objString):
             try:
                 return element.attrib[tag]
             except KeyError:
-               sys.exit('No attribute or elements under {} with the name of {}'.format(element, tag))
+                sys.exit('No attribute or elements under {} with the name of {}'.format(element, tag))
     else:
         child_element = child_elements[count]
     if not child_element is None:
