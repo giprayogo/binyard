@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-#Generic tabulate of everything (jobs, outputs)
+# Generic tabulate of everything (jobs, outputs)
+# This was made with the bulk SiC project in mind
 
 #python standard modules
 import os
