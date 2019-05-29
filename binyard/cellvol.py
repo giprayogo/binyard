@@ -2,7 +2,7 @@
 # calculate PRIMITIVE cell volume
 # TODO: multiple units
 
-import m_module.fileio as fileio
+import fileio
 import argparse
 import xml.etree.ElementTree as ET
 import numpy as np
