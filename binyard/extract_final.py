@@ -5,7 +5,7 @@ import sys
 import re
 import textwrap
 
-import m_module.fileio as fileio
+import fileio
 
 
 def grep_final_coordinates(open_file):
