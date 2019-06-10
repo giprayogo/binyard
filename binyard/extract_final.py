@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import textwrap
+import argparse
 
 import fileio
 
@@ -63,8 +64,12 @@ def get_final_pwx_input(input_file, output_file):
     return fileio.tostring_pwx(param)
 
 if __name__ == '__main__':
-    output_pathname   = 'out.o'
-    input_pathname    = 'input.in'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input', nargs='?', default='input.in')
+    parser.add_argument('output', nargs='?', default='out.o')
+    args = parser.parse_args()
+    output_pathname   = args.output
+    input_pathname    = args.input
     final_in_pathname = 'auto_final.in'
 
     ## Make final.in out of updated positions in output file
@@ -75,7 +80,7 @@ if __name__ == '__main__':
             except AttributeError as e:
                 print("%s: %s" % (sys.argv[0], e))
                 raise
-    except FileNotFoundError as e:
+    except IOError as e:
         print("%s: %s" % (sys.argv[0], e))
         raise
     with open(final_in_pathname, 'w') as fi_file:
