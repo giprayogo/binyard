@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 import collections
 
 # TODO: (BUG) supposedly case insensitive
-def listdirwith(*filename_pattern_list, path='.'):
+def listdirwith(filename_pattern_list, path='.'):
     """ Return list of directories that contain files in the list.
         May use wildcard matches (*) etc. as in shell.
         Input   : root path, list of searched filename patterns;
@@ -49,7 +49,7 @@ def find_file(path, pattern):
 #            function(the_file, *args, **kwargs)
 #    return filehandled
 
-def readlineswith(filehandle, *pattern_list, after=0, process=lambda x:x, default=[], count=False):
+def readlineswith(filehandle, pattern_list, after=0, process=lambda x:x, default=[], count=False):
     """ Return list of lines that match specified pattern(s) (OR match)
         with optional extra action """
     if count:
@@ -91,6 +91,7 @@ def split_count(indexed):
 # always return a list except when "tree" is an attrib
 # TODO: should return a list of matching objects, in case of multiple matches
 # sample objString: name.name.name
+# NOTE: functionality already provided by find/findall
 def get_xmlelement_from_obj(element, objString):
     """ Return the value (in a list) of a unique xml element or attribute
         from a tree with the specified objString, raise exception otherwise """
