@@ -20,6 +20,7 @@ template['nat']['value'] = structure['nat']['value']
 template['ntyp']['value'] = structure['ntyp']['value']
 template['cell_parameters'] = structure['cell_parameters']
 template['atomic_positions'] = structure['atomic_positions']
-template['atomic_species'] =structure['atomic_species']
+# some structure files are BAD
+#template['atomic_species'] = structure['atomic_species']
 
 print(fileio.tostring_pwx(template))
