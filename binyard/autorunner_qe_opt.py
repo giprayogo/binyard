@@ -24,13 +24,15 @@ class QEAutorunner(Autorunner2):
 
     # super-inherited functions
     # constructor; the outstream was originally implemented due to annoying redirection behaviour
-    # when working with a perl script (reason still unknown)
-    def __init__(self, toss_args=None, count=0, *args, **kwargs):
+    # when working with a perl script (actually caused by fetch)
+    def __init__(self, toss_args=None, count=0, input_file='input.in', output_file='out.o', *args, **kwargs):
         super(QEAutorunner, self).__init__(*args, **kwargs)
         if toss_args is None:
             raise ValueError("must set toss arguments")
         self.toss_args = toss_args
         self.count = count
+        self.input_file = input_file
+        self.output_file = output_file
 
     # sensing for re-submit
     def _sensor(self):
@@ -47,12 +49,14 @@ class QEAutorunner(Autorunner2):
         return done
 
     @timestamp
+    @print_args
     def _terminator(self, *args, **kwargs):
         # do not fetch since some files may get deleted
         self.qdel()
         super(QEAutorunner, self)._terminator(*args, **kwargs)
 
     @timestamp
+    @print_args
     def _actuator(self):
         self.update_files()
         self.toss()
@@ -83,15 +87,20 @@ class QEAutorunner(Autorunner2):
         subprocess.call(cmd)
 
     def update_files(self):
-        self.count += 1
-        print(self.count)
         super(QEAutorunner, self)._printout(self._COUNT_FORMAT.format(self.count))
         subprocess.call(['extract_final.py'])
         # TODO: make these as user input
-        print(' '.join(['mv', 'input.in', 'input.in.'+str(self.count)]))
-        subprocess.call(['mv', 'input.in', 'input.in.'+str(self.count)])
-        subprocess.call(['mv', 'out.o', 'out.o.'+str(self.count)])
+        mv_in_file = ['mv', self.input_file, self.next_file(self.input_file, self.count) ]
+        print(' '.join(mv_in_file))
+        subprocess.call(mv_in_file)
+        mv_out_file = ['mv', self.output_file, self.next_file(self.output_file, self.count) ]
+        print(' '.join(mv_out_file))
+        subprocess.call(mv_out_file)
         subprocess.call(['mv', 'auto_final.in', 'input.in'])
+
+    def next_file(self, pattern, count):
+        self.count += 1
+        return pattern + '.' + str(count)
 
     @print_args
     def job_finished(self):
@@ -138,7 +147,7 @@ if __name__ == '__main__':
         jsses = [ x for x in os.listdir('.') if fnmatch.fnmatch(x, '*.jss') ]
         assert len(jsses) == 1
         toss_string = jsses[0].replace('.jss', '')
-    auto = QEAutorunner(toss_string, count, interval=interval, outstream=logfile)
+    auto = QEAutorunner(toss_args=toss_string, count=count, interval=interval, outstream=logfile)
     # do initial tosses
     auto.toss()
     auto.run()
