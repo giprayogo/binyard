@@ -48,8 +48,7 @@ class TestQE(unittest.TestCase):
     _TESTDIR = '/mnt/lustre/toBeSync/genki/git-repos/binyard/test/qe_files'
     _INTERVAL = 3
 
-    # I do think that each tests here can be splitted into 3 functions
-    def test_jobfinished(self):
+    def setUp(self):
         testdir = TestQE._TESTDIR
         interval = TestQE._INTERVAL
         self.assertEqual(testdir, '/mnt/lustre/toBeSync/genki/git-repos/binyard/test/qe_files')
@@ -59,10 +58,18 @@ class TestQE(unittest.TestCase):
         self.assertEqual(len(jsses), 1)
         toss_string = jsses[0].replace('.jss', '')
 
-        auto = QEAutorunnerDebug(toss_string, count=0, interval=interval, outstream=None)
+        self.auto = QEAutorunnerDebug(toss_string, count=0, interval=interval, outstream=None)
+
+
+    # I do think that each tests here can be splitted into 3 functions
+    def test_job_finished(self):
         # The output file is there, so this should return True
-        self.assertEqual(auto.job_finished(), True)
-        # do initial tosses
+        self.assertEqual(self.auto.job_finished(), True)
+
+    def test_next_file(self):
+        count = self.auto.count
+        self.assertEqual(self.auto.next_file('input.in', 0), 'input.in.0')
+        self.assertEqual(self.auto.count, count + 1)
 #        auto.toss()
 #        auto.run()
 
