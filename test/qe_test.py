@@ -68,7 +68,9 @@ class TestQE(unittest.TestCase):
 
     def test_next_file(self):
         count = self.auto.count
-        self.assertEqual(self.auto.next_file('input.in', 0), 'input.in.0')
+        self.assertEqual(self.auto.next_file('input.in', True), 'input.in.'+str(count))
+        self.assertEqual(self.auto.count, count + 1)
+        self.assertEqual(self.auto.next_file('input.in', False), 'input.in.'+str(count+1))
         self.assertEqual(self.auto.count, count + 1)
 #        auto.toss()
 #        auto.run()

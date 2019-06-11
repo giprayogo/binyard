@@ -86,20 +86,27 @@ class QEAutorunner(Autorunner2):
         super(QEAutorunner, self)._printout(' '.join(cmd))
         subprocess.call(cmd)
 
+    #@print_args
+    #def printed_call(self, args, *other_args, **kwargs):
+    #    print(' '.join(args))
+    #    return subprocess.call(args=args, *other_args, **kwargs)
+
     def update_files(self):
         super(QEAutorunner, self)._printout(self._COUNT_FORMAT.format(self.count))
         subprocess.call(['extract_final.py'])
         # TODO: make these as user input
-        mv_in_file = ['mv', self.input_file, self.next_file(self.input_file, self.count) ]
+        mv_in_file = ['mv', self.input_file, self.next_file(self.input_file, False) ]
         print(' '.join(mv_in_file))
         subprocess.call(mv_in_file)
-        mv_out_file = ['mv', self.output_file, self.next_file(self.output_file, self.count) ]
+        mv_out_file = ['mv', self.output_file, self.next_file(self.output_file, True) ]
         print(' '.join(mv_out_file))
         subprocess.call(mv_out_file)
         subprocess.call(['mv', 'auto_final.in', 'input.in'])
 
-    def next_file(self, pattern, count):
-        self.count += 1
+    def next_file(self, pattern, increment):
+        count = self.count
+        if increment: # TODO: this is a band-aid fix
+            self.count += 1
         return pattern + '.' + str(count)
 
     @print_args
