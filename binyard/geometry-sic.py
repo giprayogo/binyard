@@ -18,7 +18,7 @@ parser.add_argument('--zigzag', '-z', action='store_true')
 parser.add_argument('--no-header', '-n', action='store_true')
 parser.add_argument('--out-file', '-o', required=True)
 args = parser.parse_args()
-pwi = fileio.parse_pwx(args.pwx_input_file)
+pwi = fileio.parse('pwx', args.pwx_input_file)
 
 # pre-determined assertions
 # make sure that vacuum is at x and y axes

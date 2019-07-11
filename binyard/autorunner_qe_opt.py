@@ -78,11 +78,11 @@ class QEAutorunner(Autorunner2):
 
     def toss(self):
         super(QEAutorunner, self)._printout(self.toss_args)
-        subprocess.call(['m_toss.pl', self.toss_args])
+        subprocess.call(['m_toss', self.toss_args])
 
     def fetch(self):
         #TODO: somehow generalize this
-        cmd = ['m_fetch.py', '--exclude', 'out', '--exclude', '*.log']
+        cmd = ['m_fetch', '--exclude', 'out', '--exclude', '*.log']
         super(QEAutorunner, self)._printout(' '.join(cmd))
         subprocess.call(cmd)
 
@@ -126,9 +126,9 @@ class QEAutorunner(Autorunner2):
                 text = fh.read()
                 if 'stopping ...' in text:
                     raise Exception(self._QE_CRASH)
-                if 'Begin final coordinates' in text:
-                    raise Exception(self._OPTIMIZED)
                 if 'JOB DONE' in text:
+                    if 'Begin final coordinates' in text:
+                        raise Exception(self._OPTIMIZED)
                     done = True
         except IOError:
             # TODO: also check job queues

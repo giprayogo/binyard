@@ -171,6 +171,102 @@ class Autorunner2(object):
         print(message, file=self.errstream)
 
 
+#class UnifiedAutorunner(Autorunner2):
+#    # non-changable class variables
+#    _FAIL_SUBMIT = 'qsub failure'
+#    _RUNNING = 'job is running'
+#    _FINISHED = 'job has been finished'
+#
+#    # super-inherited functions
+#    # constructor; the outstream was originally implemented due to annoying redirection behaviour
+#    # when working with a perl script (actually caused by fetch)
+#    def __init__(self, toss_args=None,  input_file='input.in', output_file='out.o', *args, **kwargs):
+#        super(QEAutorunner, self).__init__(*args, **kwargs)
+#        if toss_args is None:
+#            raise ValueError("must set toss arguments")
+#        self.toss_args = toss_args
+#        self.input_file = input_file
+#        self.output_file = output_file
+#
+#    # sensing for re-submit
+#    def _sensor(self):
+#        done = False
+#        try:
+#            self.fetch()
+#            if self.job_finished():
+#                super(QEAutorunner, self)._printout(self._FINISHED)
+#                done = True
+#            else:
+#                super(QEAutorunner, self)._printout(self._RUNNING)
+#        except Exception:
+#            raise
+#        return done
+#
+#    @timestamp
+#    @print_args
+#    def _terminator(self, *args, **kwargs):
+#        # do not fetch since some files may get deleted
+#        self.qdel()
+#        super(QEAutorunner, self)._terminator(*args, **kwargs)
+#
+#    @timestamp
+#    @print_args
+#    def _actuator(self):
+#        self.update_files()
+#        self.toss()
+#
+#    # child-only functions
+#    # public
+#    def qdel(self):
+#        super(QEAutorunner, self)._printout('qdel')
+#        subprocess.call(['qdel'])
+#
+#    #def qs(self):
+#    #    cluster = self.toss_args.split('.')[0]
+#    #    with open('JobNumber', 'r') as fh:
+#    #        jobnumber = fh.read().strip()
+#    #    qs = subprocess.call(['qs', cluster])
+#
+#    def toss(self, args):
+#        super(QEAutorunner, self)._printout(self.toss_args)
+#        subprocess.call(['m_toss.pl', args])
+#
+#    def fetch(self, args):
+#        #TODO: somehow generalize this
+#        cmd = ['m_fetch.py', '--exclude', 'out', '--exclude', '*.log']
+#        cmd.extend(args)
+#        super(QEAutorunner, self)._printout(' '.join(cmd))
+#        subprocess.call(cmd)
+#
+#    #@print_args
+#    #def printed_call(self, args, *other_args, **kwargs):
+#    #    print(' '.join(args))
+#    #    return subprocess.call(args=args, *other_args, **kwargs)
+#
+#    def update_files(self):
+#        super(QEAutorunner, self)._printout(self._COUNT_FORMAT.format(self.count))
+#        subprocess.call(['extract_final.py'])
+#        # TODO: make these as user input
+#        mv_in_file = ['mv', self.input_file, self.next_file(self.input_file, False) ]
+#        print(' '.join(mv_in_file))
+#        subprocess.call(mv_in_file)
+#        mv_out_file = ['mv', self.output_file, self.next_file(self.output_file, True) ]
+#        print(' '.join(mv_out_file))
+#        subprocess.call(mv_out_file)
+#        subprocess.call(['mv', 'auto_final.in', 'input.in'])
+#
+#    def next_file(self, pattern, increment):
+#        count = self.count
+#        if increment: # TODO: this is a band-aid fix
+#            self.count += 1
+#        return pattern + '.' + str(count)
+#
+#    @print_args
+#    def job_finished(self):
+# TODO: to be completed
+
+#class BGQAutorunner(Autorunner2):
+
 def done_cobaltlog(filename):
     #print('cobalt log: {0}'.format(filename))
     with open(filename, 'r') as log:
