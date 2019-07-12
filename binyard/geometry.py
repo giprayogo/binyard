@@ -7,6 +7,7 @@ import numpy as np
 from numpy import array
 from numpy.linalg import inv
 from numpy.linalg import norm
+from numpy import dot
 from numpy import matmul
 import os
 
@@ -15,62 +16,12 @@ np.set_printoptions(precision=15) # match QE printed precision
 RING_SIZE = {'hollow': 6, 'bridge': 2, 'top': 1}
 HALF_RING_SIZE = {'hollow': 4, 'bridge': 2, 'top': 1}
 
-class PWXCell(object):
-    bohr2angstrom = 0.529177249
-    CELL_OPTION = 'Invalid cell parameters options'
-
-    def __init__(self, filename):
-        pw_input = parse('pwx', filename) # I don't think it is necessary to save whole dictionary as member
-        self.alat2angstrom = float(pw_input['celldm(1)']['value']) * bohr2angstrom
-
-        self.cell_unit = pw_input['cell_parameters']['options'] #only, alat, bohr, angstrom is possible
-        # TODO: only do unit conversions when values are called
-        self.M = array(pw_input['cell_parameters']['value'], dtype='f8')
-        M = self.M
-        if cell_param == 'alat':
-            pass
-        elif cell_param == 'bohr':
-            M *= bohr2alat
-        elif cell_param == 'angstrom':
-            m *= angstrom2alat
-        #else:
-        #    raise ValueError(self.CELL_OPTION)
-        self.atoms_unit = pw_input['atomic_positions']['options']
-        self.atoms = {}
-        atoms = self.atoms
-        for x in pw_input['atomic_positions']['value']:
-            species = x[0]
-            position = x[1:]
-            if species not in self.species.keys():
-                atoms[species] = []
-            else:
-                atoms[species].append(position)
-
-        #self.species = array( [ x[0] for x in pwi['atomic_positions']['value'] ], dtype='S')
-        #self.positions = self.toalatifcrystal(array( [ x[1:] for x in pwi['atomic_positions']['value'] ], dtype='f8'))
-
-    # if no unit is specified, return in alat
-    def get_positions(self, species=None, unit='alat'):
-        if species is None:
-            positions = self.positions[:]
-        else:
-            positions = self.positions[species]
-
-    # internally stores everything in alat coordinate
-    def toalatifcrystal(self, positions):
-        if pwi['atomic_positions']['options'] == 'crystal':
-            return crystal2alat(positions)
-        return positions
-
-    def crystal2alat(self, positions):
-        return [ matmul(self.M, x) for x in positions ]
-
-    def alat2crystal(self, positions):
-        return [ matmul(inv(self.M), x) for x in positions ]
-
-
 def normalize(vector):
-    return vector / np.linalg.norm(vector)
+    return vector / norm(vector)
+
+def project(v, n):
+    nb = normalize(n)
+    return v - nb*(dot(n,v) / norm(n))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -101,7 +52,8 @@ if __name__ == '__main__':
     # unit conversions
     # try not to convert to bohr/angstom until the very last
     bohr2angstrom = 0.529177249
-    alat2angstrom = float(pwi['celldm(1)']['value']) * bohr2angstrom
+    celldm = float(pwi['celldm(1)']['value'])
+    alat2angstrom = celldm * bohr2angstrom
     # matrices for conversion to/from crystal and cartesian units (in alat)
     M = (np.array(pwi['cell_parameters']['value'], dtype='f8'))
     Ma = M * alat2angstrom
@@ -195,6 +147,7 @@ if __name__ == '__main__':
             ,]) + (1 - np.cos(angle))*np.outer(axis, axis)
 
     h_sic_axis = normalize(h_center[:-1] - sic_center[:-1])
+    #print(alat2crystal([sic_center]))
     # negative here is -very- important, because of the quadrant where I put the H2.
     # ideally it should self-identify which one to be used but then I don't want to spend the time
     tilt = np.arccos(np.dot(h_sic_axis, np.array([-1.0, 0.0]))) #in radian
@@ -215,16 +168,23 @@ if __name__ == '__main__':
     # vector between H atoms
     h_axis = normalize(h_atoms[0] - h_atoms[1]) # in alat; careful for z shift
 
-    # switch to normal (netgative tilted x)
-    #h_surface_angle = min_angle(h_axis, tilted_y)
+    # relative to surface normal (negative tilted x)
     h_surface_angle = min_angle(h_axis, -tilted_x)
-    # also this one matches y better
-    #h_twist_angle = np.rad2deg(np.arccos(np.dot(h_axis, tilted_z)))
-    h_twist_angle = np.rad2deg(np.arccos(np.dot(h_axis, tilted_y)))
+    # for the twist, project h first agains the surface
+    h_h = norm(h_atoms[0]-h_atoms[1])
+    h_proj = project(h_axis, -tilted_x)
+    #print(dot(h_proj, -tilted_x))
+    #print(h_atoms[0])
+    #print(alat2crystal([h_center]))
+    #print(alat2crystal([h_center+2*h_h*tilted_z]))
+    #print(alat2crystal([h_center+3*h_h*h_proj]))
+    #print(np.rad2deg(np.arccos(np.dot(h_proj, tilted_y))))
+    #print(np.rad2deg(np.arccos(np.dot(h_proj, tilted_z))))
+    h_twist_angle = min_angle(normalize(h_proj), tilted_z)
 
     # x-y radius
     def mean_radii(positions, center):
-        #mean = sum(position_list[:-1]) / len(position_list) 
+        #mean = sum(position_list[:-1]) / len(position_list)
         return sum([ norm(x[:-1] - center[:-1]) for x in positions]) / len(positions)
 
     si_r_ave = mean_radii(si_atoms, sic_center)
