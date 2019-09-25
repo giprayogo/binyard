@@ -71,6 +71,8 @@ def latest(_=None, pattern=''):
 
 
 def dmc_dat(_=None, start=5):
+    """ Wrapper for injecting dmc.dat files into first argument of a function;
+    Allow specification of starting *scalar/dmc.dat series, default to 005 """
     def resolve(regex_match):
         if regex_match:
             return regex_match.group(0)
@@ -87,9 +89,43 @@ def dmc_dat(_=None, start=5):
         return injected
 
     if _ is None:
-        return inject 
+        return inject
     else:
         return inject(_)
+
+
+def qmcpack_output(_=None, start=5):
+    """ Wrapper for injecting qmcpack (succesful) output file into the first argument
+    of a function """
+    def resolve(regex_match):
+        if regex_match:
+            return regex_match.group(0)
+        return ''
+    def serie(filename):
+        #print(filename)
+        #print(resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'))
+        try:
+            return int(resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'))
+        except ValueError: # happens when no series/individual run
+            return 0 # so that it will not be included
+
+    def inject(func):
+        def injected(*args, **kwargs):
+            qmcpack_outputs = sorted(sorted([ x for x in os.listdir('.')
+                #if '.qmc.xml' in x and not '.swp' in x and serie(x) >= start  ],
+                if resolve(re.search('.qmc$', x))
+                and not '.swp' in x and serie(x) >= start  ],
+                key=twist), key=series)
+            # something
+            return func(qmcpack_outputs, *args, **kwargs)
+        return injected
+
+    if _ is None:
+        return inject
+    else:
+        return inject(_)
+
+    return injected
 
 
 # Used for sorting
