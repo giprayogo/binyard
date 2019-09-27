@@ -36,7 +36,7 @@ if __name__ == '__main__':
             help='Adsorption site')
     parser.add_argument('--table', '-t', action='store_true',
             help='Print in mergeable format')
-    parser.add_argument('--out-file', '-o', required=True)
+    parser.add_argument('--out-file', '-o')
     #parser.add_argument('--bare', '-b', required=True)
     parser.add_argument('--no-header', '-n', action='store_true')
     args = parser.parse_args()
@@ -194,6 +194,33 @@ if __name__ == '__main__':
         with open(out_file, 'r') as fh:
             return [ line for line in fh if '!' in line ][-1].split()[4]
 
+    # Si-C bond lengths
+    # copied from geometry-sic.py
+    P_BOND_ANGLE = 90
+    D_BOND_ANGLE = 30
+    def average(x):
+        return sum(x) / len(x)
+    def degangle(v1, v2):
+        assert len(v1) == len(v2) == 3
+        assert np.isclose(np.linalg.norm(v1), 1.0) and np.isclose(np.linalg.norm(v2), 1.0)
+        return min(np.rad2deg(np.arccos(np.dot(v1, v2))), np.rad2deg(np.arccos(np.dot(v1, -v2))))
+
+    bonds = [ ai-aj for i, ai in enumerate(sic_atoms) for j, aj in enumerate(sic_atoms) if j > i ]
+    bonds_r = list(map(lambda y: np.linalg.norm(y) * alat2angstrom,
+            filter(lambda x: np.linalg.norm(x) * alat2angstrom < 2.0, bonds)))
+    p_bonds_r = list(map(lambda y: np.linalg.norm(y) * alat2angstrom,
+            filter(lambda x: np.linalg.norm(x) * alat2angstrom < 2.0
+                and np.isclose(degangle(normalize(x), np.array([0, 0, 1])), P_BOND_ANGLE, atol=10.0),
+                    bonds)))
+    d_bonds_r = list(map(lambda y: np.linalg.norm(y) * alat2angstrom,
+            filter(lambda x: np.linalg.norm(x) * alat2angstrom < 2.0
+            and np.isclose(degangle(normalize(x), np.array([0, 0, 1])), D_BOND_ANGLE, atol=10.0),
+                bonds)))
+    if args.out_file:
+        e = get_energy(args.out_file)
+    else:
+        e = 0
+
     #TODOL can these be shortened?
     if not args.table:
         # coordinates for recheck
@@ -226,4 +253,6 @@ if __name__ == '__main__':
            h_surface_angle,
            h_twist_angle,
            metric * alat2angstrom,
-           get_energy(args.out_file) ])
+           h_h * alat2angstrom,
+           average(bonds_r), average(p_bonds_r), average(d_bonds_r),
+           e ])
