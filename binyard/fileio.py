@@ -221,7 +221,6 @@ def parse(format, filename):
     with open(filename, 'r') as fh:
         return parser(fh.read())
 
-
 def get_parser(format):
     if format == 'pwx':
         return fromstring_pwx
