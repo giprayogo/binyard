@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+m_do */ 'pwd; grep total\ energy\ \  out.o | wc -l' > steps.txt
+grep PWSCF\ \  */out.o  > time.txt
