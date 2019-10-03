@@ -52,7 +52,7 @@ class QEScalarField(object):
 
     def to_file(self, filename, datatype='charge'):
         """ Assuming the charge in form of 3D-numpy array """
-        assert datatype == 'charge' or datatype == 'rdg' or datatype == 'gradient'
+        assert datatype == 'charge' or datatype == 'rdg' or datatype == 'gradient' or datatype == 'rdg-inv'
         with open(filename, 'w') as fh:
             for line in self.comment:
                 fh.write(line)
@@ -64,9 +64,23 @@ class QEScalarField(object):
             elif datatype == 'rdg':
                 data = np.reshape(self.rdg, (int(self.rdg.size/6), 6))
                 fh.write('\n'.join([ ' '.join([ str(y) for y in x ]) for x in data ]))
+            elif datatype == 'rdg-inv':
+                data = np.reshape(self.rdg, (int(self.rdg.size/6), 6))
+                data = 1./data
+                fh.write('\n'.join([ ' '.join([ str(y) for y in x ]) for x in data ]))
             elif datatype == 'gradient':
                 data = np.reshape(self.gradient, (int(self.gradient.size/6), 6))
                 fh.write('\n'.join([ ' '.join([ str(y) for y in x ]) for x in data ]))
+
+    def rdg_hist(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        flat_rdg = np.reshape(self.rdg.size, 1)
+        flat_density = np.reshape(self.data.size, 1)
+        #hist, bin_edges = np.histogram(np.hstack(flat_rdg, flat_density), density=True)
+        ax.hist(np.hstack(flat_rdg, flat_density), density=True, bins='auto')
+        plt.show()
+
 
     def get_gradient(self):
         # TODO: scale according to the grid, + save
@@ -95,7 +109,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-filename', '-o', default='delta.cube')
     parser.add_argument('--type', '-t', type=str, default='delta',
-            choices=['delta', 'gradient', 'rdg', 'y-gradient'])
+            choices=['delta', 'gradient', 'rdg', 'rdg-inv', 'rdg-hist'])
     parser.add_argument('density_files', nargs='+')
     args = parser.parse_args()
     if args.type == 'delta':
@@ -112,6 +126,20 @@ if __name__ == '__main__':
         density.get_gradient()
         density.get_reduced_gradient()
         density.to_file(args.output_filename, 'rdg')
+    elif args.type == 'rdg-inv': # temporary; note that the critical point for rdgs are the zeros
+        # just invert
+        assert(len(args.density_files)) == 1
+        density = QEScalarField.from_file(args.density_files[0])
+        density.get_gradient()
+        density.get_reduced_gradient()
+        density.to_file(args.output_filename, 'rdg-inv')
+    elif args.type == 'rdg-hist': # temporary; note that the critical point for rdgs are the zeros
+        # just invert
+        assert(len(args.density_files)) == 1
+        density = QEScalarField.from_file(args.density_files[0])
+        density.get_gradient()
+        density.get_reduced_gradient()
+        density.rdg_hist()
     elif args.type == 'gradient': # actually norm-gradient (scalar)
         assert(len(args.density_files)) == 1
         density = QEScalarField.from_file(args.density_files[0])
