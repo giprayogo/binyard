@@ -12,5 +12,5 @@
 for file in "${@:1:(($#-1))}"
 do
  [ -d $file ] && { cwd=$(pwd); cd $file; (eval "${@: -1}"); cd $cwd; }
- [ -f $file ] && { c=${@: -1}; (eval "${c/\{\}/$file}"); }
+ [ -f $file ] && { c=${@: -1}; (eval "${c//\{\}/$file}"); }
 done
