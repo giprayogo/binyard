@@ -44,5 +44,6 @@ with open(filename, 'r') as data_file:
                 if multiplier:
                     split[column] = Decimal(split[column]) * multiplier
                 else:
-                    split[column] = Decimal(split[column]) / Decimal(split[multiplier_index])
+                    #split[column] = Decimal(split[column]) / Decimal(split[multiplier_index])
+                    split[column] = Decimal(split[column]) * Decimal(split[multiplier_index])
             print(' '.join(map(str,split)))
