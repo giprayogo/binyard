@@ -61,7 +61,7 @@ if __name__ == '__main__':
         for y in open(x, 'r').readlines()
         if 'OMP 1st level threads' in y ]
 
-    print('Total DMC time: {}'.format(dmc_time))
+    print('Total DMC time: {}'.format(dmc_times))
 
     for twist in scalar.keys():
         filename_list = scalar[twist]
