@@ -50,8 +50,10 @@ class QEScalarField(object):
         qescalarfield = cls(comment, header, data, (dx,dy,dz))
         return qescalarfield
 
-    def to_file(self, filename, datatype='charge'):
-        """ Assuming the charge in form of 3D-numpy array """
+    def to_file(self, filename, datatype='charge', select=None):
+        """ Assuming the charge in form of 3D-numpy array
+        The 'select' option is to choose at which charge density, the RDG is plotted.
+        This is because vesta does not support selective visualization. """
         assert datatype == 'charge' or datatype == 'rdg' or datatype == 'gradient' or datatype == 'rdg-inv'
         with open(filename, 'w') as fh:
             for line in self.comment:
@@ -75,10 +77,16 @@ class QEScalarField(object):
     def rdg_hist(self):
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        flat_rdg = np.reshape(self.rdg.size, 1)
-        flat_density = np.reshape(self.data.size, 1)
+        flat_rdg = np.reshape(self.rdg, (self.rdg.size, 1))
+        print(flat_rdg)
+        flat_density = np.reshape(self.data, (self.data.size, 1))
+        print(flat_density)
         #hist, bin_edges = np.histogram(np.hstack(flat_rdg, flat_density), density=True)
-        ax.hist(np.hstack(flat_rdg, flat_density), density=True, bins='auto')
+        #ax.hist(np.hstack((flat_rdg, flat_density)), density=True, bins='auto')
+        ax.scatter(flat_density, flat_rdg, marker='.', s=1)
+        ax.set_ylim(0,1)
+        ax.set_ylabel('Reduced density gradient')
+        ax.set_xlabel('Electron density')
         plt.show()
 
 
@@ -109,16 +117,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-filename', '-o', default='delta.cube')
     parser.add_argument('--type', '-t', type=str, default='delta',
-            choices=['delta', 'gradient', 'rdg', 'rdg-inv', 'rdg-hist'])
+            choices=['delta', 'gradient', 'rdg', 'rdg-inv', 'rdg-hist', 'sum'])
     parser.add_argument('density_files', nargs='+')
     args = parser.parse_args()
-    if args.type == 'delta':
+    if args.type == 'sum':
         assert(len(args.density_files)) == 2
         density_files = args.density_files
         density0 = QEScalarField.from_file(density_files[0])
         density1 = QEScalarField.from_file(density_files[1])
         density_delta = copy.deepcopy(density0)
-        density_delta.data = density0.data - density1.data
+        density_delta.data = density0.data + density1.data
+        density_delta.to_file(args.output_filename)
+    if args.type == 'delta':
+        assert(len(args.density_files)) >= 2
+        density_files = args.density_files
+        densities = [ QEScalarField.from_file(x) for x in density_files ]
+        density_delta = copy.deepcopy(densities[0])
+        for density in densities[1:]:
+            density_delta.data = density_delta.data - density.data
         density_delta.to_file(args.output_filename)
     elif args.type == 'rdg':
         assert(len(args.density_files)) == 1
