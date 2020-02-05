@@ -102,8 +102,6 @@ def qmcpack_output(_=None, start=5):
             return regex_match.group(0)
         return ''
     def serie(filename):
-        #print(filename)
-        #print(resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'))
         try:
             return int(resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'))
         except ValueError: # happens when no series/individual run
