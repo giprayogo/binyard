@@ -373,7 +373,6 @@ def process_directory(cwd:str,
 if __name__ == '__main__':
     # download
     root = 'dmc_energies'
-    syslabels = [ 'cplx', 'bare' ]
     rsync_opts = [ '-av', '--delete',
             '--include=*/', '--include=*.dmc.dat', '--include=*.scalar.dat',
             '--include=*.qmc', '--include=*.out', '--include=*.output', '--include=*.xml',
@@ -383,7 +382,10 @@ if __name__ == '__main__':
     # read remote sources
     # TODO: temporary hard-naming
     with open('remotes', 'r') as f:
-        remote_sources = [ [x] for x in f if not '#' in x ]
+        buff = f.readlines()
+        syslabels = [ x.split()[0] for x in buff if not '#' in x ]
+        remote_sources = [ [x.split()[1]] for x in buff if not '#' in x ]
+    print(remote_sources)
 
     # pre-create dirs
     if not os.path.exists(root):
