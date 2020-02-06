@@ -80,6 +80,7 @@ def extrapolate(data, dfn, cfn, defn=None, cefn=None, flatfn=None, order=2):
     else:
         return (data, extrapolated)
 
+
 def to_meanbartuple(numstring):
     """ Input string in this format: -195.5(7) """
     parenthesized = re.compile(r'(?<=\().*(?=\))')
@@ -88,10 +89,12 @@ def to_meanbartuple(numstring):
     return (float(nonparenthesized.search(numstring).group()),
             multiplier*float(parenthesized.search(numstring).group()))
 
+
 def get_tsteps(qmcpack_xml_filename):
     """ Use lxml library to get timesteps from every qmc runs """
     tree = etree.parse(qmcpack_xml_filename)
     return [ float(x.text) for x in tree.xpath("//qmc/parameter[@name='timestep']") ]
+
 
 def query_qmcpack_output(cwd):
     # done like this as a form of priority list
@@ -106,13 +109,16 @@ def query_qmcpack_output(cwd):
                     return None # basically not run yet
     return output_filenames
 
+
 def get_ln(filename, ln, cwd):
     """ get filename from wc """
     _ = subprocess.run(['wc', '-l', filename], cwd=cwd, **subproc_opts)
     ln[filename] = _.stdout.split()[0]
 
+
 def qmcpack_hash(cwd):
-    """ To be used to determine caching """
+    """ Join QMCPACK DMC scalars, hash them to see if there are any changes
+    To be used for feeding hashedcache() """
     join_scalar = '/Users/maezono/Dropbox/01backup/git-repos/binyard/binyard/join_scalar.py'
     joinscalar_outs = subprocess.run(join_scalar, cwd=cwd, **subproc_opts)
 
@@ -170,6 +176,7 @@ def hashedcache(hashfn, cachedir='./.cache'):
         return wrapped
     return wrapper
 
+
 @hashedcache(qmcpack_hash)
 def get_qmcpack_stats(cwd):
     """ All metadata of a qmcpack runs, in a directory """
@@ -190,11 +197,13 @@ def get_qmcpack_stats(cwd):
     samples = sum([ int(x)-1 for x in ln.values() ])
 
     dirname = cwd.split('/')[-1].strip()
+    # remove all alphabetic components
     alphabet = re.compile(r'[a-zA-Z]*')
     # format : ads-supertwist611-supershift100-S2-dt...-...
     splitnum = [ re.sub(alphabet, '', x) for x in dirname.split('-') ]
     supercell = int(splitnum[3])
-    twist = int(splitnum[1].rstrip('11'))
+    #twist = int(splitnum[1].rstrip('11'))
+    twist = int(splitnum[1]) # just postprocess later
     try:
         timestep = float(splitnum[4])
     except IndexError: # no mark means this
@@ -273,7 +282,7 @@ def get_qmcpack_stats(cwd):
     dats = [samples, supercell, twist, timestep ]
     data = { x:y for x,y in zip(labels, dats) }
     return data
-    #return samples, supercell, twist, timestep, label
+
 
 @hashedcache(qmcpack_hash)
 def get_qmcpack_energies(cwd):
@@ -281,40 +290,9 @@ def get_qmcpack_energies(cwd):
         This is because qmca processing can be very slow with a lot of samples """
     python2 = '/Users/maezono/miniconda3/envs/py27_gen/bin/python'
     qmca = '/Users/maezono/Dropbox/01backup/git-repos/qmcpack/nexus/bin/qmca'
-    #join_scalar = '/Users/maezono/Dropbox/01backup/git-repos/binyard/binyard/join_scalar.py'
-
-    # caching
-    #PREPICKLE = '.ppkl'
-    #POSTPICKLE = '.qpkl'
-    #basename = cwd.replace('/', '_').strip('_')
-    #prepickle = join(cachedir, basename+PREPICKLE)
-    #postpickle = join(cachedir, basename+POSTPICKLE)
-    #if not os.path.exists(cachedir):
-    #    os.mkdir(cachedir)
-
-    # first merge the dmc files
-    #joinscalar_outs = subprocess.run(join_scalar, cwd=cwd, **subproc_opts)
 
     # check if no changes
     dmcdats = [ x for x in os.listdir(cwd) if fnmatch(x, '*s000.dmc.dat') ]
-    #hashes = [ hashlib.sha256(open(join(cwd, x), 'rb').read()).hexdigest()
-    #        for x in dmcdats ]
-    #try:
-    #    with open(prepickle, 'rb') as f:
-    #        pickled_hashes = pickle.load(f)
-    #except OSError:
-    #    print("No datafile pickles: {}".format(prepickle))
-    #    pickled_hashes = None
-
-    # try load pickled data; if the prepickle matches
-    #if pickled_hashes == hashes:
-    #    try:
-    #        with open(postpickle, 'rb') as f:
-    #            return pickle.load(f)
-    #    except OSError:
-    #        print("No pickled data: {}".format(postpickle))
-    #        # Continue to executing qmca
-    #        pass
 
     # interface with qmca
     qmcacols = {'energy': 6, 'bar': 8}
@@ -322,53 +300,17 @@ def get_qmcpack_energies(cwd):
     qmcaproc.extend(dmcdats)
     completedprocess = subprocess.run(qmcaproc, cwd=cwd, **subproc_opts)
     output = completedprocess.stdout.split()
-    #try:
     data = { x:float(output[qmcacols[x]]) for x in ['energy', 'bar'] }
-
-    # Cache new pickles
-    #with open(prepickle, 'wb') as f:
-    #    pickle.dump(hashes, f)
-    #with open(postpickle, 'wb') as f:
-    #    pickle.dump(data, f)
-
     return data
-    #except ValueError as ve:
-        # no qmca files' skip; miscellaneous qmca error
-    #    return None
-        #raise ValueError(ve)
 
-# bundle function for single thread/process run on single directory
-def process_directory(cwd:str,
-        *fns, label:str=None) -> list:
-        #datafn:function=lambda _: None, statfn:function=lambda _: None,
-        #label:str=None) -> list:
-    """ Each; single; (any software) run directory;
-        consist of any data as defined by statfn.
+
+def process_directory(cwd:str, *fns, label:str=None) -> list:
+    """ Bundle function for single thread/process run on single directory
         Can be feed to Thread or Process.
         Supposedly general for any calc software,
         given the implemented datafn, statfn, and ppfn """
-    #stats = statfn(cwd=cwd)
-    #data = datafn(cwd=cwd)
     return [ fn(cwd=cwd) for fn in fns ]
-    #return (stats, data)
-    # get combined dmc runs from the newer runs
-    # out: 000.dat
-    #print(joinscalar_outs.stderr, file=sys.stderr)
 
-        # modify data
-        # TODO: better integration of the label
-        #labels = [ 'label', 'supercell', 'twist', 'timestep', 'energy', 'bar', 'samples',
-        #        'cores', 'execution_time', 'nodehour per step' ]
-        #things = [ label, supercell, twist, timestep, energy*HARTREE2RY/supercell,
-        #        bar*HARTREE2RY/supercell, samples]
-                #sum(cores)/len(cores), sum(relevant_execs)/len(relevant_execs),
-                #sum(nps)/len(nps) ]
-        #data[cwd] = { x: y for x,y in zip(labels, things) }
-        #final = { x:y for x,y in zip(labels, things) }
-        #print(final)
-        #with open(picklename+'dat', 'wb') as f:
-        #    pickle.dump(final, f)
-        #return final
 
 if __name__ == '__main__':
     # download
@@ -470,6 +412,7 @@ if __name__ == '__main__':
             return '{0: 5f}'.format(_)
 
     pprint(procdata)
+    print([ x['extrapolated'] for x in procdata.items() ])
     #pprint({ k: [ ' '.join([ str('{0:.4f}'.format(x)) for x in y.values() ]) for y in v ] for k,v in data.items() })
 #    pprint(data)
 #    pprint({ k: [ ' '.join([ flex_format(x) for z in y for x in z.values() ]) for y in v ] for k,v in data.items() })
