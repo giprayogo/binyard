@@ -11,7 +11,7 @@ from os.path import join
 import time
 
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from concurrent.futures import as_completed, wait
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION
 
@@ -26,9 +26,6 @@ from lxml import etree
 import hashlib
 import pickle
 
-# binaries and scripts
-rsync = ['rsync']
-
 # shared options
 subproc_opts = { 'capture_output': True }
 HARTREE2RY = 2.
@@ -41,13 +38,17 @@ def extrapolate(data, dfn, cfn, defn=None, cefn=None, flatfn=None, order=2):
         dfn: function to get domain
         cfn: function to get codomain
         order: polynomial order of the extrapolation
+        flatfn: flatten; remember that extrapolation always do X_N -> X map, for any X object
+            flatfn govern how the initial data is merged after extrapolation
     And return in the form of original data, with merged properties """
     extrapolate_tau = '/Users/maezono/currentCASINO/bin_qmc/utils/intelmac-gcc-brew/extrapolate_tau'
-
     # make the domain and codomain for extrapolation
     d = [ dfn(x) for x in data ]
     if defn:
         de = [ defn(x) for x in data ]
+
+    # temporary safety switch: find better method later
+    order = min([ order, len(data) ])
 
     c = [ cfn(x) for x in data ]
     if cefn:
@@ -70,12 +71,19 @@ def extrapolate(data, dfn, cfn, defn=None, cefn=None, flatfn=None, order=2):
     stdout = pipe.communicate(extrapolate_feed+'\n', timeout=10)
 
     # this is very SPECIFIC to the extrapolate_tau binary
-    extrapolated = [ to_meanbartuple(x.split()[-1]) for x in stdout[0].split('\n')
-            if 'DMC energy at zero time step' in x ]
+    try:
+        extrapolated = [ to_meanbartuple(x.split()[-1]) for x in stdout[0].split('\n')
+                if 'DMC energy at zero time step' in x ][0]
+    except IndexError:
+        # not found
+        return (data, None)
+    finally:
+        os.remove(temporaryfilename)
 
     # remove leftovers and return
-    os.remove(temporaryfilename)
     if flatfn:
+        # is flatenned
+        # the merger is done here! actually
         return (flatfn(data), extrapolated)
     else:
         return (data, extrapolated)
@@ -142,8 +150,13 @@ def hashedcache(hashfn, cachedir='./.cache'):
             basename = cwd.replace('/', '_')+function.__name__
             prepickle = join(cachedir, basename+HASHPICKLE)
             postpickle = join(cachedir, basename+POSTPICKLE)
-            if not os.path.exists(cachedir):
+            # TODO: I think operations below are not-thread-safe; consider other options
+            try:
                 os.mkdir(cachedir)
+            except FileExistsError:
+                pass
+            #if not os.path.exists(cachedir):
+            #    os.mkdir(cachedir)
 
             # compare saved and current hashes
             hashes = hashfn(cwd)
@@ -164,6 +177,7 @@ def hashedcache(hashfn, cachedir='./.cache'):
                     print("No pickled data: {}".format(postpickle))
                     pass
 
+            print("Hash updated ({}); updating cache".format(cwd))
             # the actual execution of original function
             data = function(*args, **kwargs)
 
@@ -285,9 +299,10 @@ def get_qmcpack_stats(cwd):
 
 
 @hashedcache(qmcpack_hash)
-def get_qmcpack_energies(cwd):
+def get_qmcpack_energies(cwd) -> dict:
     """ Throw dmcdats into qmcpack; cache results; read from cache if exists.
-        This is because qmca processing can be very slow with a lot of samples """
+        This is because qmca processing can be very slow with a lot of samples.
+        Note that the caching is now handled by @hashedcache tag """
     python2 = '/Users/maezono/miniconda3/envs/py27_gen/bin/python'
     qmca = '/Users/maezono/Dropbox/01backup/git-repos/qmcpack/nexus/bin/qmca'
 
@@ -296,10 +311,11 @@ def get_qmcpack_energies(cwd):
 
     # interface with qmca
     qmcacols = {'energy': 6, 'bar': 8}
-    qmcaproc = [ python2, qmca, '-q', 'ev', '-a', '-e', '5000' ]
+    qmcaproc = [ python2, qmca, '-q', 'ev', '-a' ] # '-e', '5000' ]
     qmcaproc.extend(dmcdats)
     completedprocess = subprocess.run(qmcaproc, cwd=cwd, **subproc_opts)
     output = completedprocess.stdout.split()
+    #print(output)
     data = { x:float(output[qmcacols[x]]) for x in ['energy', 'bar'] }
     return data
 
@@ -311,98 +327,170 @@ def process_directory(cwd:str, *fns, label:str=None) -> list:
         given the implemented datafn, statfn, and ppfn """
     return [ fn(cwd=cwd) for fn in fns ]
 
+# the flow: merge extrapolate, merge extrapolate
+def separate(data:list, labelfn=None) -> list:
+    """ Separate data by label specified by labelfn
+    data: a dictionary data, labelfn: the criterion function for separating """
+    labels = set([ labelfn(x) for x in data ])
+    return [ [ m for m in data if labelfn(m) == label ] for label in labels ]
+
+
+def qmcpack_process(data:list) -> list:
+    """ Hard-defined procedures for a typical QMCPACK data
+        Note: per-system basis """
+    # start by timestep extrapolation
+    # separate by twist and supercell
+    def mergedict(a, b):
+        """ Merge dict a to dict b, turn same key values into a list """
+        c = {}
+        keyset = set(iter(a)).union(set(iter(b)))
+        for key in keyset:
+            va = a.setdefault(key)
+            vb = b.setdefault(key)
+            if not isinstance(va, list):
+                va = [va]
+            if not isinstance(vb, list):
+                vb = [vb]
+            c[key] = va + vb
+        return c
+
+    separated = separate(data, labelfn=lambda x: (x['supercell'], x['twist']))
+    #print(separated)
+    _data = []
+    # timestep extrapolation
+    for part in separated:
+        if len(part) >= 2:
+            # remember that they are also merged here
+            mergedpart, ext_result = extrapolate(part,
+                    dfn=lambda x: x['timestep'],
+                    cfn=lambda x: x['energy']/x['supercell'],
+                    cefn=lambda x: x['bar']/x['supercell'], order=2,
+                    flatfn=partial(reduce, mergedict))
+            #print(mergedpart)
+            # TODO: functionalized, and to be less weird-ed
+            mergedpart.setdefault('ts_ext', {})
+            mergedpart['ts_ext']['energy'] = ext_result[0]
+            mergedpart['ts_ext']['bar'] = ext_result[1]
+            _data.append(mergedpart)
+        else:
+            _data.append(part)
+
+    # this time for supercell extrapolation, separate by none
+    procdata, ext_result = extrapolate(_data,
+            # note: there should be a check for not-equal result
+            dfn=lambda x: list(set(x['supercell']))[0],
+            cfn=lambda x: x['ts_ext']['energy'],
+            cefn=lambda x: x['ts_ext']['bar'], order=2,
+            flatfn=partial(reduce, mergedict))
+    return (procdata, ext_result)
+
 
 if __name__ == '__main__':
     # download
-    root = 'dmc_energies'
+    download_root = 'dmc_energies'
+    # remember that *THIS* is the main control for which files are being downloaded
     rsync_opts = [ '-av', '--delete',
-            '--include=*/', '--include=*.dmc.dat', '--include=*.scalar.dat',
-            '--include=*.qmc', '--include=*.out', '--include=*.output', '--include=*.xml',
-            '--exclude=*' ]
+            '--include=*/', # make all directories
+            '--include=*.dmc.dat', '--include=*.scalar.dat', # the DMC datas
+            '--include=*.qmc', '--include=*.out', # output files
+            '--include=*.output', '--include=*.xml', # output files (2)
+            '--exclude=*' ] # exclude anything else
     SSH_WORKER = 5
 
     # read remote sources
     # TODO: temporary hard-naming
     with open('remotes', 'r') as f:
-        buff = f.readlines()
-        syslabels = [ x.split()[0] for x in buff if not '#' in x ]
-        remote_sources = [ [x.split()[1]] for x in buff if not '#' in x ]
-    print(remote_sources)
+        raws = [ x.split() for x in f.readlines() if not '#' in x ]
+    labels = [ x[0] for x in raws ]
+    sources = [ x[1] for x in raws ]
 
-    # pre-create dirs
-    if not os.path.exists(root):
-        os.mkdir(root)
-    for path in syslabels:
-        if not os.path.exists(join(root, path)):
-            os.mkdir(join(root, path))
+    # pre-create download dirs
+    downloaddirs = [ join(download_root, label) for label in labels ]
+    for downloaddir in downloaddirs:
+        if not os.path.exists(downloaddir):
+            os.makedirs(downloaddir)
 
-    # download both complex and bare
+    # download to label directory under download_root
     # limit worker number due to maximum ssh connections
     with ThreadPoolExecutor(max_workers=SSH_WORKER) as executor:
-        futures = [ executor.submit(
-            subprocess.run(rsync + rsync_opts + source + [path], cwd=root), )
-                for source, path in zip(remote_sources, syslabels) ]
+        futures = []
+        # not using list comprehension for readability
+        for source, destination in zip(sources, downloaddirs):
+            print('Downloading from: {}'.format(source))
+            rsync = ['rsync'] + rsync_opts + [ source, destination ]
+            future = executor.submit(subprocess.run(rsync)) #, cwd=download_root), )
+            futures.append(future)
         done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
 
-    # note: always transport full paths
-    pathlists = [ [ os.path.join(root, subroot, path)
-        for path in os.listdir(os.path.join(root, subroot)) ]
-        for subroot in syslabels ]
-    systems = {s: d for s,d in zip(syslabels, pathlists)}
+    # list downloaded paths under each label
+    labeledpaths = [
+            (label, [ x.path
+                for x in os.scandir(downloaddir) if x.is_dir() ] )
+            for label, downloaddir in zip(labels, downloaddirs) ]
 
-    # initial postprocessing of data
-    data = { x: [] for x in systems }
+    data = { x: [] for x in labels }
     with ThreadPoolExecutor() as executor:
         futures = {
                 executor.submit(process_directory, path,
-                    get_qmcpack_energies, get_qmcpack_stats): syslabel
-                for syslabel,paths in systems.items()
+                    get_qmcpack_energies, get_qmcpack_stats): label
+                for label, paths in labeledpaths
                 for path in paths }
-        # this part is the blocking one
+        # the blocking part
         for future in as_completed(futures):
-            syslabel = futures[future]
-            resultstuple = future.result()
-            merged = reduce(lambda x,y: {**x, **y}, resultstuple)
-            data[syslabel].append(merged) #= future.result()
-    print(' '.join([ 'supercell', 'twist', 'timestep', 'energy', 'bar', 'samples',
-            'cores', 'execution_time', 'nodehour per step' ]))
+            label = futures[future]
+            results = future.result()
+            merged = reduce(lambda x,y: {**x, **y}, results)
+            data[label].append(merged) #= future.result()
 
+    final = {}
     # postprocessing of data
-    # NOTE: divided by datatype
-    procdata = {}
-    for syslabel,results in data.items():
-        def get_suptt(x):
-            # omit timestep (because that is the one we would like to extrapolate)
-            return (x['supercell'], x['twist'])
-        supttpair = set([ get_suptt(x) for x in results ])
-        sortedresults = [ [ m for m in results if get_suptt(m) == k ] for k in supttpair ]
-        # extrapolate w.r.t. timestep
+    for label, part in data.items():
+        procdata, ext_result = qmcpack_process(part)
+        print(procdata)
+        print(ext_result)
+        final[label] = ext_result
+    print(final)
+    # temp: ugly "processing"
+    print(final['cplx'][0] - final['bare'][0] - final['hyd'][0])
+    print((final['cplx'][1]**2 + final['bare'][1]**2 + final['hyd'][1]**2)**0.5)
+    exit()
 
-        def mergedict(a, b):
-            """ Merge dict a to dict b, turn same key values into a list """
-            c = {}
-            keyset = set(iter(a)).union(set(iter(b)))
-            for key in keyset:
-                va = a.setdefault(key)
-                vb = b.setdefault(key)
-                c[key] = (va, vb)
-            return c
+    # TODO: extrapolate by supercell size too
+    # then extrapolate
+    #for syslabel,results in data.items():
+    #    def get_suptt(x):
+    #        # omit timestep (because that is the one we would like to extrapolate)
+    #        return (x['supercell'], x['twist'])
+    #    supttpair = set([ get_suptt(x) for x in results ])
+    #    sortedresults = [ [ m for m in results if get_suptt(m) == k ] for k in supttpair ]
+    #    # extrapolate w.r.t. timestep
 
-        procdata[syslabel] = []
-        for r in sortedresults:
-            #print(r)
-            if len(r) >= 2:
-                extrapolated_pair = extrapolate(r,
-                        dfn=lambda x: x['timestep'],
-                        cfn=lambda x: x['energy']/x['supercell'],
-                        cefn=lambda x: x['bar']/x['supercell'], order=2,
-                        flatfn=partial(reduce, mergedict))
-                # TODO: functionalized
-                _ = extrapolated_pair[0]
-                _['extrapolated'] = extrapolated_pair[1]
-                procdata[syslabel].append(_)
-            else:
-                procdata[syslabel].append(r)
+    #    def mergedict(a, b):
+    #        """ Merge dict a to dict b, turn same key values into a list """
+    #        c = {}
+    #        keyset = set(iter(a)).union(set(iter(b)))
+    #        for key in keyset:
+    #            va = a.setdefault(key)
+    #            vb = b.setdefault(key)
+    #            c[key] = (va, vb)
+    #        return c
+
+    #    procdata[syslabel] = []
+    #    for r in sortedresults:
+    #        #print(r)
+    #        if len(r) >= 2:
+    #            extrapolated_pair = extrapolate(r,
+    #                    dfn=lambda x: x['timestep'],
+    #                    cfn=lambda x: x['energy']/x['supercell'],
+    #                    cefn=lambda x: x['bar']/x['supercell'], order=2,
+    #                    flatfn=partial(reduce, mergedict))
+    #            # TODO: functionalized
+    #            _ = extrapolated_pair[0]
+    #            _['extrapolated'] = extrapolated_pair[1]
+    #            procdata[syslabel].append(_)
+    #        else:
+    #            procdata[syslabel].append(r)
+    ## TODO: extrapolate by supercell size too
 
     # just for printing format
     def flex_format(_):
