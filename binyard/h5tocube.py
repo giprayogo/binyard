@@ -28,51 +28,63 @@ def esttype(xmlfile):
     raise TypeError # no estimator
 
 
-# TODO: should not return in string; a dedicated data structure is better
-# TODO: better variable naming
-def cubexmlheader(xmlfile):
-    """ Parse grid information from QMCPACK's XML """
-    tree = etree.parse(xmlfile)
-    h00 = 'QMCPACK density/spin density data\nsource file: '+xmlfile+'\n'
+class ScalarField(object):
+    def __init__(self, xmlfile):
+        """ Parse grid information from QMCPACK's XML """
+        # no need to keep the tree within the object
+        tree = etree.parse(xmlfile)
+        # also hack for others
+        self.estimator = esttype(xmlfile)
 
-    for lattice in tree.xpath("///parameter[@name='lattice']"):
-        l = np.array(list(map(float, lattice.text.split())))
-        l = l.reshape(-1, 3)
-    nl = [ norm(x) for x in l ]
+        # temporary hack for h00
+        self.xmlfile = xmlfile
 
-    estimator = esttype(xmlfile)
-    if estimator == 'spindensity':
-        for _ in tree.xpath("///parameter[@name='dr']"):
-            dr = [ float(x) for x in _.text.split() ]
-            # because it is rounded up for integer grid
-            grid = [ int(np.ceil(x[0]/x[1])) for x in zip(nl,dr) ]
-            dr = [ x[0]/x[1] for x in zip(l, grid) ]
-        try:
-            grid
-        except NameError:
-            for _ in tree.xpath("///parameter[@name='grid']"):
-                grid = _.text.split()
-                dr = [ x[0]/x[1] for x in zip(l, grid) ]
-        h1 = [ [x[0]]+x[1].tolist() for x in zip(grid, dr) ]
-    elif estimator == 'density':
-        for _ in tree.xpath("//estimator[@type='density']"):
-            delta = np.array([ float(x) for x in _.get('delta').split() ])
-            grid = [ int(x) for x in 1/delta ]
-            dr = [ x[0]/x[1] for x in zip(l, grid) ]
-        h1 = [ [x[0]]+x[1].tolist() for x in zip(grid, dr) ]
+        # whatever this lattice is
+        for lattice in tree.xpath("///parameter[@name='lattice']"):
+            l = np.array(list(map(float, lattice.text.split())))
+            l = l.reshape(-1, 3)
+        nl = [ norm(x) for x in l ]
 
-    for positions in tree.xpath("//attrib[@name='position']"):
-        p = np.array(list(map(float, positions.text.split())))
-        p = p.reshape(-1, 3)
-        # remember that the positions are in fractional coordinates
-        p = [ sum([ y[0]*y[1] for y in zip(x,l) ]) for x in p ]
-    for ionid in tree.xpath("//attrib[@name='ionid']"):
-        i = [ atomid[x.strip('0123456789')] for x in ionid.text.split() ]
-        i = [ [x,x] for x in i ]
-    h2 = [ y[0]+y[1].tolist() for y in zip(i,p) ]
-    nat = len(h2)
-    h0 = [[ nat, 0., 0., 0. ]]
-    return h00+'\n'.join([ ' '.join([ str(y) for y in x ]) for x in h0+h1+h2 ])
+        # different tree tracing with it
+        # grid determination; for now no need to care about the
+        # exact form of grid and dr
+        if self.estimator == 'spindensity':
+            for _ in tree.xpath("///parameter[@name='dr']"):
+                dr = [ float(x) for x in _.text.split() ]
+                # because it is rounded up for integer grid
+                self.grid = [ int(np.ceil(x[0]/x[1])) for x in zip(nl,dr) ]
+                self.dr = [ x[0]/x[1] for x in zip(l, self.grid) ]
+            try:
+                self.grid
+            except NameError:
+                for _ in tree.xpath("///parameter[@name='grid']"):
+                    self.grid = _.text.split()
+                    self.dr = [ x[0]/x[1] for x in zip(l, self.grid) ]
+        elif self.estimator == 'density':
+            for _ in tree.xpath("//estimator[@type='density']"):
+                delta = np.array([ float(x) for x in _.get('delta').split() ])
+                self.grid = [ int(x) for x in 1/delta ]
+                self.dr = [ x[0]/x[1] for x in zip(l, self.grid) ]
+
+        for positions in tree.xpath("//attrib[@name='position']"):
+            p = np.array(list(map(float, positions.text.split())))
+            p = p.reshape(-1, 3)
+            # remember that the positions are in fractional coordinates
+            self.p = [ sum([ y[0]*y[1] for y in zip(x,l) ]) for x in p ]
+        for ionid in tree.xpath("//attrib[@name='ionid']"):
+            i = [ atomid[x.strip('0123456789')] for x in ionid.text.split() ]
+            self.i = [ [x,x] for x in i ]
+
+    def add_value(self, valuefile):
+        pass
+
+    def get_cube_header(self):
+        h00 = 'QMCPACK density/spin density data\nsource file: '+xmlfile+'\n'
+        h1 = [ [x[0]]+x[1].tolist() for x in zip(self.grid, self.dr) ]
+        h2 = [ y[0]+y[1].tolist() for y in zip(self.i, self.p) ]
+        nat = len(h2)
+        h0 = [[ nat, 0., 0., 0. ]]
+        return h00+'\n'.join([ ' '.join([ str(y) for y in x ]) for x in h0+h1+h2 ])
 
 
 parser = argparse.ArgumentParser()
@@ -81,11 +93,18 @@ parser.add_argument('-i', help='QMCPACK input XML', required=True)
 parser.add_argument('f', help='Estimator *.stat.h5 files', nargs='+')
 args = parser.parse_args()
 
-header = cubexmlheader(args.i)
-estimator = esttype(args.i)
+xmlfile = args.i
+scalarfiles = args.f
+
+cell = ScalarField(xmlfile)
+estimator = cell.estimator
+header = cell.get_cube_header()
+
+#header = cubexmlheader(args.i)
+#estimator = esttype(args.i)
 e = args.e
 
-ndens = len(args.f)
+ndens = len(scalarfiles)
 
 if ndens > 0:
     outtype='avg'
@@ -93,6 +112,7 @@ else:
     outtype=''
 
 # divide per series
+# TODO: perhaps a general format for density is better
 density = {}
 if estimator == 'spindensity':
     for h5file in args.f:
