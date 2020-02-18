@@ -19,6 +19,7 @@ atomid = {
         }
 
 def esttype(xmlfile):
+    """ Get estimator type from QMCPACK input file """
     tree = etree.parse(xmlfile)
     for _ in tree.xpath("//estimator[@type='spindensity']"):
         return 'spindensity'
@@ -26,7 +27,11 @@ def esttype(xmlfile):
         return 'density'
     raise TypeError # no estimator
 
+
+# TODO: should not return in string; a dedicated data structure is better
+# TODO: better variable naming
 def cubexmlheader(xmlfile):
+    """ Parse grid information from QMCPACK's XML """
     tree = etree.parse(xmlfile)
     h00 = 'QMCPACK density/spin density data\nsource file: '+xmlfile+'\n'
 
@@ -34,7 +39,7 @@ def cubexmlheader(xmlfile):
         l = np.array(list(map(float, lattice.text.split())))
         l = l.reshape(-1, 3)
     nl = [ norm(x) for x in l ]
-    
+
     estimator = esttype(xmlfile)
     if estimator == 'spindensity':
         for _ in tree.xpath("///parameter[@name='dr']"):
@@ -71,9 +76,9 @@ def cubexmlheader(xmlfile):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-e', type=int, default=0)
-parser.add_argument('-i', required=True)
-parser.add_argument('f', nargs='+')
+parser.add_argument('-e', help='Equillibration length', type=int, default=0)
+parser.add_argument('-i', help='QMCPACK input XML', required=True)
+parser.add_argument('f', help='Estimator *.stat.h5 files', nargs='+')
 args = parser.parse_args()
 
 header = cubexmlheader(args.i)
@@ -105,13 +110,13 @@ if estimator == 'spindensity':
         density[series]['ub'][twist] = u.std(0)
         density[series]['d'][twist] = d.mean(0)
         density[series]['db'][twist] = d.std(0)
-    
+
     for serie in density.keys():
         um = np.array(list(density[serie]['u'].values()))
         ub = np.array(list(density[serie]['ub'].values()))
         dm = np.array(list(density[serie]['d'].values()))
         db = np.array(list(density[serie]['db'].values()))
-    
+
         # the twist averaging
         um = um.mean(0)
         dm = dm.mean(0)
@@ -154,11 +159,11 @@ elif estimator == 'density':
         density[series].setdefault('ub', {})
         density[series]['u'][twist] = u.mean(0)
         density[series]['ub'][twist] = u.std(0)
-    
+
     for serie in density.keys():
         um = np.array(list(density[serie]['u'].values()))
         ub = np.array(list(density[serie]['ub'].values()))
-    
+
         # the twist averaging
         um = um.mean(0)
         ub = np.sqrt(sum([ x**2 for x in ub ]))
