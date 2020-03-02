@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-# script; very specific; for only this task
-# thread spwasn another thread spawn another thread
-# to be made into a general crawler
-# TODO: can the pickle be made as a wrapper?
 import argparse
 import subprocess
 import sys
@@ -23,8 +19,16 @@ from pprint import pprint
 
 from lxml import etree
 
+import sympy
+from sympy.parsing.sympy_parser import parse_expr
+
 import hashlib
 import pickle
+
+import matplotlib
+import matplotlib.pyplot as plt
+from numpy import linspace
+matplotlib.rc('axes.formatter', useoffset=False)
 
 # shared options
 extbin = { 'extrapolate_tau': '/Users/maezono/currentCASINO/bin_qmc/utils/'
@@ -33,7 +37,8 @@ subproc_opts = { 'capture_output': True }
 HARTREE2RY = 2.
 
 # TODO: can a generalized form be conceived for any kind of binary?
-def extrapolate(data, dfn, cfn, cefn=None, order=2):
+def extrapolate(data, dfn, cfn, cefn=None, order=2, plot=False,
+        xlabel='', ylabel='', title=''):
     """ Calls CASINO's extrapolate_tau for polynomial extrapolation with
             estimated error bar.
         Note that only codomain error is supported.
@@ -41,12 +46,30 @@ def extrapolate(data, dfn, cfn, cefn=None, order=2):
             data: Any form of a collection of data
             dfn: Function for getting extrapolation domain from data
             cfn: Function for getting extrapolation codomain from data
-            order: Polynomial order """
+            order: Polynomial order
+            plot: (blocking) plot of the extrapolation for debug """
+
+    def to_meanbartuple(numstring):
+        """ Get mean-bar tuple from this format: -195.5(7) """
+        parenthesized = re.compile(r'(?<=\().*(?=\))')
+        nonparenthesized = re.compile(r'.*(?=\()')
+        multiplier = 0.1**len(nonparenthesized.search(numstring).group().split('.')[-1])
+        return (float(nonparenthesized.search(numstring).group()),
+                multiplier*float(parenthesized.search(numstring).group()))
+
+    def to_function(fnstring):
+        """ Get function coefficients from string """
+        pass
+
+
     # make the domain and codomain for extrapolation
     domain = [ dfn(x) for x in data ]
 
     # Automatically reduces polynomial order if data length is insufficient
-    order = min([ order, len(data) ])
+    if len(data) < order:
+        print('WARNING: insufficient data for given polynomial order; reducing',
+                file=sys.stderr)
+        order = len(data)
 
     codomain = [ cfn(x) for x in data ]
     if cefn:
@@ -67,28 +90,48 @@ def extrapolate(data, dfn, cfn, cefn=None, order=2):
     polynomial = ' '.join(map(str, range(order)))
     extrapolate_feed = '\n'.join([temporaryfilename, str(order), polynomial])
     stdout = pipe.communicate(extrapolate_feed+'\n', timeout=10)
+    stdoutlines = stdout[0].split('\n')
 
     # TODO: I think this can be generalized
     try:
-        extrapolated = [ to_meanbartuple(x.split()[-1]) for x in stdout[0].split('\n')
+        extrapolated = [ to_meanbartuple(x.split()[-1])
+                for x in stdoutlines
                 if 'DMC energy at zero time step' in x ][0]
+        # note the space: remove leading and trailing spaces as well
+        function = parse_expr(next(
+            ( x.strip('y= ').replace('^', '**') for x in stdoutlines if 'y=' in x )))
+        x = next(iter(function.free_symbols))
     except IndexError:
-        # The call has failed for some reasons
+        # The call has failed for unknown issue
         return None
+    except StopIteration:
+        # For single point data (e.g. hydrogen finite size), no extrapolation possible
+        print('Warning: irregular extrapolate_tau output', file=sys.stderr)
+        return extrapolated
     finally:
         os.remove(temporaryfilename)
+
+    if plot:
+        fig, ax = plt.subplots()
+        # TODO: how to determine general range
+        rightmost = 1.05*max(domain)
+        subdomain = linspace(0, rightmost, 200)
+        ax.set_xlim(left=0, right=rightmost)
+        _domain, _codomain, _codomain_error = zip(*sorted(
+                zip(domain, codomain, codomain_error), key=lambda x: x[0]))
+        ax.errorbar(_domain, _codomain, yerr=_codomain_error,
+                marker='o',  capsize=5)
+        ax.plot(subdomain, [function.subs([(x, d)]) for d in subdomain], marker='')
+        ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel(xlabel)
+        plt.tight_layout()
+        plt.show()
 
     # Let the caller determine what to do with the extrapolation result
     return extrapolated
 
 
-def to_meanbartuple(numstring):
-    """ Input string in this format: -195.5(7) """
-    parenthesized = re.compile(r'(?<=\().*(?=\))')
-    nonparenthesized = re.compile(r'.*(?=\()')
-    multiplier = 0.1**len(nonparenthesized.search(numstring).group().split('.')[-1])
-    return (float(nonparenthesized.search(numstring).group()),
-            multiplier*float(parenthesized.search(numstring).group()))
 
 
 def get_tsteps(qmcpack_xml_filename):
@@ -321,7 +364,7 @@ def process_directory(cwd:str, *fns, label:str=None) -> list:
     return [ fn(cwd=cwd) for fn in fns ]
 
 
-def qmcpack_process(data:list) -> list:
+def qmcpack_process(data:list, plot=False) -> list:
     """ Hard-defined procedures for a typical QMCPACK data
         Note: per-system basis """
     # start by timestep extrapolation
@@ -353,12 +396,19 @@ def qmcpack_process(data:list) -> list:
     separated = separate(data, separator=lambda x: (x['supercell'], x['twist']))
     _data = [] # TODO: avoid this pattern
     for part in separated:
+        # extrapolate when using at least 2 timesteps
         if len(part) >= 2:
             # remember that they are also merged here
+            print(part[0]['supercell'])
+            print(part[0]['twist'])
             ext_result = extrapolate(part,
                     dfn=lambda x: x['timestep'],
                     cfn=lambda x: x['energy']/x['supercell'],
-                    cefn=lambda x: x['bar']/x['supercell'], order=2)
+                    cefn=lambda x: x['bar']/x['supercell'],
+                    plot=plot, order=2,
+                    xlabel='DMC timestep (a.u.)',
+                    ylabel='DMC energy / prim. cell (Ha)',
+                    title='')
             mergedpart = reduce(sum_dict, part)
             # TODO: functionalized, and to be less weird-ed
             mergedpart.setdefault('ts_ext', {})
@@ -369,12 +419,13 @@ def qmcpack_process(data:list) -> list:
             _data.append(part)
 
     # supercell extrapolation. assumes single twist grid size / supercell
+    # TODO: no checks for available supercell sizes
     ext_result = extrapolate(_data,
             # note: there should be a check for not-equal result
             dfn=lambda x: list(set(x['supercell']))[0],
             cfn=lambda x: x['ts_ext']['energy'],
             cefn=lambda x: x['ts_ext']['bar'],
-            order=2)
+            plot=plot, order=3)
     procdata = reduce(sum_dict, _data)
     return (procdata, ext_result)
 
@@ -391,6 +442,13 @@ if __name__ == '__main__':
             '--exclude=*' ] # exclude anything else
     SSH_WORKER = 5
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--plot', action='store_true')
+    parser.add_argument('-n', '--no-sync', action='store_true')
+    args = parser.parse_args()
+    plot = args.plot
+    nosync = args.no_sync
+
     # read remote sources
     # TODO: temporary hard-naming
     with open('remotes', 'r') as f:
@@ -406,15 +464,16 @@ if __name__ == '__main__':
 
     # download to label directory under download_root
     # limit worker number due to maximum ssh connections
-    with ThreadPoolExecutor(max_workers=SSH_WORKER) as executor:
-        futures = []
-        # not using list comprehension for readability
-        for source, destination in zip(sources, downloaddirs):
-            print('Downloading from: {}'.format(source))
-            rsync = ['rsync'] + rsync_opts + [ source, destination ]
-            future = executor.submit(subprocess.run(rsync)) #, cwd=download_root), )
-            futures.append(future)
-        done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
+    if not nosync:
+        with ThreadPoolExecutor(max_workers=SSH_WORKER) as executor:
+            futures = []
+            # not using list comprehension for readability
+            for source, destination in zip(sources, downloaddirs):
+                print('Downloading from: {}'.format(source))
+                rsync = ['rsync'] + rsync_opts + [ source, destination ]
+                future = executor.submit(subprocess.run(rsync)) #, cwd=download_root), )
+                futures.append(future)
+            done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
 
     # list downloaded paths under each label
     labeledpaths = [
@@ -439,7 +498,11 @@ if __name__ == '__main__':
     final = {}
     # postprocessing of data
     for label, part in data.items():
-        procdata, ext_result = qmcpack_process(part)
+        print(label)
+        if plot:
+            procdata, ext_result = qmcpack_process(part, plot=True)
+        else:
+            procdata, ext_result = qmcpack_process(part, plot=False)
         print(procdata)
         print(ext_result)
         final[label] = ext_result
