@@ -27,41 +27,39 @@ import hashlib
 import pickle
 
 # shared options
+extbin = { 'extrapolate_tau': '/Users/maezono/currentCASINO/bin_qmc/utils/'
+                              'intelmac-gcc-brew/extrapolate_tau' }
 subproc_opts = { 'capture_output': True }
 HARTREE2RY = 2.
 
 # TODO: can a generalized form be conceived for any kind of binary?
-def extrapolate(data, dfn, cfn, defn=None, cefn=None, flatfn=None, order=2):
-    """ Calls in extrapolate_tau to calculate the data
-    Signature: extrapolate(data, fn=lambda x:x, args=None, key='timestep', order=2)
-        data: collection of data in any form you want; as long as you supply a correct function
-        dfn: function to get domain
-        cfn: function to get codomain
-        order: polynomial order of the extrapolation
-        flatfn: flatten; remember that extrapolation always do X_N -> X map, for any X object
-            flatfn govern how the initial data is merged after extrapolation
-    And return in the form of original data, with merged properties """
-    extrapolate_tau = '/Users/maezono/currentCASINO/bin_qmc/utils/intelmac-gcc-brew/extrapolate_tau'
+def extrapolate(data, dfn, cfn, cefn=None, order=2):
+    """ Calls CASINO's extrapolate_tau for polynomial extrapolation with
+            estimated error bar.
+        Note that only codomain error is supported.
+        Explanation:
+            data: Any form of a collection of data
+            dfn: Function for getting extrapolation domain from data
+            cfn: Function for getting extrapolation codomain from data
+            order: Polynomial order """
     # make the domain and codomain for extrapolation
-    d = [ dfn(x) for x in data ]
-    if defn:
-        de = [ defn(x) for x in data ]
+    domain = [ dfn(x) for x in data ]
 
-    # temporary safety switch: find better method later
+    # Automatically reduces polynomial order if data length is insufficient
     order = min([ order, len(data) ])
 
-    c = [ cfn(x) for x in data ]
+    codomain = [ cfn(x) for x in data ]
     if cefn:
-        ybars = [ cefn(x) for x in data ]
+        codomain_error = [ cefn(x) for x in data ]
 
     temporaryfilename = 'temp'+str(time.time())
-    # make a temporary file for the extrapolate_tau
+    # Write a file for extrapolate_tau. This is the only way it can read data
     with open(temporaryfilename, 'w') as f:
-        for t,y,ybar in zip(d,c,ybars):
-            f.write(' '.join(map(str, [t, y, ybar]))+'\n')
+        for d,c,ce in zip(domain,codomain,codomain_error):
+            f.write(' '.join(map(str, [d, c, ce]))+'\n')
 
     # open process
-    pipe = subprocess.Popen(extrapolate_tau,
+    pipe = subprocess.Popen(extbin['extrapolate_tau'],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             encoding='utf8')
 
@@ -70,23 +68,18 @@ def extrapolate(data, dfn, cfn, defn=None, cefn=None, flatfn=None, order=2):
     extrapolate_feed = '\n'.join([temporaryfilename, str(order), polynomial])
     stdout = pipe.communicate(extrapolate_feed+'\n', timeout=10)
 
-    # this is very SPECIFIC to the extrapolate_tau binary
+    # TODO: I think this can be generalized
     try:
         extrapolated = [ to_meanbartuple(x.split()[-1]) for x in stdout[0].split('\n')
                 if 'DMC energy at zero time step' in x ][0]
     except IndexError:
-        # not found
-        return (data, None)
+        # The call has failed for some reasons
+        return None
     finally:
         os.remove(temporaryfilename)
 
-    # remove leftovers and return
-    if flatfn:
-        # is flatenned
-        # the merger is done here! actually
-        return (flatfn(data), extrapolated)
-    else:
-        return (data, extrapolated)
+    # Let the caller determine what to do with the extrapolation result
+    return extrapolated
 
 
 def to_meanbartuple(numstring):
@@ -327,21 +320,22 @@ def process_directory(cwd:str, *fns, label:str=None) -> list:
         given the implemented datafn, statfn, and ppfn """
     return [ fn(cwd=cwd) for fn in fns ]
 
-# the flow: merge extrapolate, merge extrapolate
-def separate(data:list, labelfn=None) -> list:
-    """ Separate data by label specified by labelfn
-    data: a dictionary data, labelfn: the criterion function for separating """
-    labels = set([ labelfn(x) for x in data ])
-    return [ [ m for m in data if labelfn(m) == label ] for label in labels ]
-
 
 def qmcpack_process(data:list) -> list:
     """ Hard-defined procedures for a typical QMCPACK data
         Note: per-system basis """
     # start by timestep extrapolation
     # separate by twist and supercell
-    def mergedict(a, b):
-        """ Merge dict a to dict b, turn same key values into a list """
+    # the flow: merge extrapolate, merge extrapolate
+    # TODO: instead of list of list there ought to be a better representation
+    def separate(data:list, separator=None) -> list:
+        """ Group data by separator output """
+        labels = set([ separator(x) for x in data ])
+        return [ [ m for m in data if separator(m) == label ]
+                for label in labels ]
+
+    def sum_dict(a, b):
+        """ Sum dict a,b into c. Same-key values merged into a list """
         c = {}
         keyset = set(iter(a)).union(set(iter(b)))
         for key in keyset:
@@ -354,19 +348,18 @@ def qmcpack_process(data:list) -> list:
             c[key] = va + vb
         return c
 
-    separated = separate(data, labelfn=lambda x: (x['supercell'], x['twist']))
-    #print(separated)
-    _data = []
     # timestep extrapolation
+    # what is it below: do not mix data for different supercell and twist size
+    separated = separate(data, separator=lambda x: (x['supercell'], x['twist']))
+    _data = [] # TODO: avoid this pattern
     for part in separated:
         if len(part) >= 2:
             # remember that they are also merged here
-            mergedpart, ext_result = extrapolate(part,
+            ext_result = extrapolate(part,
                     dfn=lambda x: x['timestep'],
                     cfn=lambda x: x['energy']/x['supercell'],
-                    cefn=lambda x: x['bar']/x['supercell'], order=2,
-                    flatfn=partial(reduce, mergedict))
-            #print(mergedpart)
+                    cefn=lambda x: x['bar']/x['supercell'], order=2)
+            mergedpart = reduce(sum_dict, part)
             # TODO: functionalized, and to be less weird-ed
             mergedpart.setdefault('ts_ext', {})
             mergedpart['ts_ext']['energy'] = ext_result[0]
@@ -375,13 +368,14 @@ def qmcpack_process(data:list) -> list:
         else:
             _data.append(part)
 
-    # this time for supercell extrapolation, separate by none
-    procdata, ext_result = extrapolate(_data,
+    # supercell extrapolation. assumes single twist grid size / supercell
+    ext_result = extrapolate(_data,
             # note: there should be a check for not-equal result
             dfn=lambda x: list(set(x['supercell']))[0],
             cfn=lambda x: x['ts_ext']['energy'],
-            cefn=lambda x: x['ts_ext']['bar'], order=2,
-            flatfn=partial(reduce, mergedict))
+            cefn=lambda x: x['ts_ext']['bar'],
+            order=2)
+    procdata = reduce(sum_dict, _data)
     return (procdata, ext_result)
 
 
@@ -455,42 +449,6 @@ if __name__ == '__main__':
     print((final['cplx'][1]**2 + final['bare'][1]**2 + final['hyd'][1]**2)**0.5)
     exit()
 
-    # TODO: extrapolate by supercell size too
-    # then extrapolate
-    #for syslabel,results in data.items():
-    #    def get_suptt(x):
-    #        # omit timestep (because that is the one we would like to extrapolate)
-    #        return (x['supercell'], x['twist'])
-    #    supttpair = set([ get_suptt(x) for x in results ])
-    #    sortedresults = [ [ m for m in results if get_suptt(m) == k ] for k in supttpair ]
-    #    # extrapolate w.r.t. timestep
-
-    #    def mergedict(a, b):
-    #        """ Merge dict a to dict b, turn same key values into a list """
-    #        c = {}
-    #        keyset = set(iter(a)).union(set(iter(b)))
-    #        for key in keyset:
-    #            va = a.setdefault(key)
-    #            vb = b.setdefault(key)
-    #            c[key] = (va, vb)
-    #        return c
-
-    #    procdata[syslabel] = []
-    #    for r in sortedresults:
-    #        #print(r)
-    #        if len(r) >= 2:
-    #            extrapolated_pair = extrapolate(r,
-    #                    dfn=lambda x: x['timestep'],
-    #                    cfn=lambda x: x['energy']/x['supercell'],
-    #                    cefn=lambda x: x['bar']/x['supercell'], order=2,
-    #                    flatfn=partial(reduce, mergedict))
-    #            # TODO: functionalized
-    #            _ = extrapolated_pair[0]
-    #            _['extrapolated'] = extrapolated_pair[1]
-    #            procdata[syslabel].append(_)
-    #        else:
-    #            procdata[syslabel].append(r)
-    ## TODO: extrapolate by supercell size too
 
     # just for printing format
     def flex_format(_):
@@ -501,8 +459,3 @@ if __name__ == '__main__':
 
     pprint(procdata)
     print([ x['extrapolated'] for x in procdata.items() ])
-    #pprint({ k: [ ' '.join([ str('{0:.4f}'.format(x)) for x in y.values() ]) for y in v ] for k,v in data.items() })
-#    pprint(data)
-#    pprint({ k: [ ' '.join([ flex_format(x) for z in y for x in z.values() ]) for y in v ] for k,v in data.items() })
-    #print('\n'.join([ ' '.join([ str(x) for x in y[1] ]) for y in _data ]))
-
