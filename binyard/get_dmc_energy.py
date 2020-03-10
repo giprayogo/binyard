@@ -24,6 +24,7 @@ from sympy.parsing.sympy_parser import parse_expr
 
 import hashlib
 import pickle
+from braceexpand import braceexpand
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -439,6 +440,7 @@ if __name__ == '__main__':
             '--include=*.dmc.dat', '--include=*.scalar.dat', # the DMC datas
             '--include=*.qmc', '--include=*.out', # output files
             '--include=*.output', '--include=*.xml', # output files (2)
+            '--include=template',
             '--exclude=*' ] # exclude anything else
     SSH_WORKER = 5
 
@@ -455,6 +457,7 @@ if __name__ == '__main__':
         raws = [ x.split() for x in f.readlines() if not '#' in x ]
     labels = [ x[0] for x in raws ]
     sources = [ x[1] for x in raws ]
+    source_endings = [ x.split('/')[-1] for x in sources ]
 
     # pre-create download dirs
     downloaddirs = [ join(download_root, label) for label in labels ]
@@ -476,10 +479,17 @@ if __name__ == '__main__':
             done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
 
     # list downloaded paths under each label
+    assert len(labels) == len(downloaddirs) == len(source_endings)
+    #print(source_endings)
+    #print([[ fnmatch(x.path.split('/')[-1],ending) for x in os.scandir(downloaddir) ]
+    print([[ (x.path.split('/')[-1],ending) for x in os.scandir(downloaddir) ]
+        for downloaddir,ending in zip(downloaddirs, source_endings) ])
     labeledpaths = [
             (label, [ x.path
-                for x in os.scandir(downloaddir) if x.is_dir() ] )
-            for label, downloaddir in zip(labels, downloaddirs) ]
+                for x in os.scandir(downloaddir)
+                if x.is_dir() and
+                any([ fnmatch(x.path.split('/')[-1], ending) for ending in braceexpand(endings) ]) ] )
+            for label, downloaddir, endings in zip(labels, downloaddirs, source_endings) ]
 
     data = { x: [] for x in labels }
     with ThreadPoolExecutor() as executor:
