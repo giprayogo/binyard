@@ -7,3 +7,4 @@ tags
 *.cube
 *.h5
 *.xml
+*.DS_Store

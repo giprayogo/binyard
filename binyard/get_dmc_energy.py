@@ -6,6 +6,8 @@ import os
 from os.path import join
 import time
 
+import numpy as np
+
 import threading
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from concurrent.futures import as_completed, wait
@@ -28,7 +30,6 @@ from braceexpand import braceexpand
 
 import matplotlib
 import matplotlib.pyplot as plt
-from numpy import linspace
 matplotlib.rc('axes.formatter', useoffset=False)
 
 # shared options
@@ -38,7 +39,7 @@ subproc_opts = { 'capture_output': True }
 HARTREE2RY = 2.
 
 # TODO: can a generalized form be conceived for any kind of binary?
-def extrapolate(data, dfn, cfn, cefn=None, order=2, plot=False,
+def extrapolate(data, save_filename, dfn, cfn, cefn=None, order=2, plot=False,
         xlabel='', ylabel='', title=''):
     """ Calls CASINO's extrapolate_tau for polynomial extrapolation with
             estimated error bar.
@@ -64,6 +65,7 @@ def extrapolate(data, dfn, cfn, cefn=None, order=2, plot=False,
 
 
     # make the domain and codomain for extrapolation
+    print('data', data)
     domain = [ dfn(x) for x in data ]
 
     # Automatically reduces polynomial order if data length is insufficient
@@ -81,6 +83,12 @@ def extrapolate(data, dfn, cfn, cefn=None, order=2, plot=False,
     with open(temporaryfilename, 'w') as f:
         for d,c,ce in zip(domain,codomain,codomain_error):
             f.write(' '.join(map(str, [d, c, ce]))+'\n')
+    # write the data
+    os.makedirs('extrapolate_data', exist_ok=True)
+    with open(os.path.join('extrapolate_data', save_filename), 'w') as f:
+        # TODO: allow no-cefn as well
+        for m in zip(domain, codomain, codomain_error):
+            f.write(" ".join(map(str, m))+'\n')
 
     # open process
     pipe = subprocess.Popen(extbin['extrapolate_tau'],
@@ -112,27 +120,52 @@ def extrapolate(data, dfn, cfn, cefn=None, order=2, plot=False,
     finally:
         os.remove(temporaryfilename)
 
+    # NOTE: these function only accepts sympy function for now
+    def ssreg(fn, domain, codomain):
+        ybar = np.mean(np.array(codomain))
+        return sum( (fn.subs([(x, d)]) -  ybar)**2 for d in domain )
+
+    def sstot(fn, codomain):
+        ybar = np.mean(np.array(codomain))
+        return sum( (y -  ybar)**2 for y in codomain )
+
+    # sorted actually for plotting
+    _domain, _codomain, _codomain_error = zip(*sorted(
+            zip(domain, codomain, codomain_error), key=lambda x: x[0]))
+
+    #print(sstot(function, _codomain))
+    #print(sstot(function, _codomain))
+    #print(sstot(function, _codomain))
+    #exit()
+
+    r_square = ssreg(function, _domain, _codomain) / sstot(function, _codomain)
+
     if plot:
         fig, ax = plt.subplots()
         # TODO: how to determine general range
         rightmost = 1.05*max(domain)
-        subdomain = linspace(0, rightmost, 200)
+        subdomain = np.linspace(0, rightmost, 200)
         ax.set_xlim(left=0, right=rightmost)
-        _domain, _codomain, _codomain_error = zip(*sorted(
-                zip(domain, codomain, codomain_error), key=lambda x: x[0]))
+
         ax.errorbar(_domain, _codomain, yerr=_codomain_error,
                 marker='o',  capsize=5)
         ax.plot(subdomain, [function.subs([(x, d)]) for d in subdomain], marker='')
         ax.set_title(title)
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
+
+        # print the r square
+        left, right = ax.get_xlim()
+        bottom, top = ax.get_ylim()
+        xloc = left + 0.7*(right-left)
+        yloc = bottom + 0.1*(top-bottom)
+        plt.text(xloc, yloc, f'R-squared = {r_square:0.4f}')
+
         plt.tight_layout()
         plt.show()
 
     # Let the caller determine what to do with the extrapolation result
     return extrapolated
-
-
 
 
 def get_tsteps(qmcpack_xml_filename):
@@ -365,7 +398,7 @@ def process_directory(cwd:str, *fns, label:str=None) -> list:
     return [ fn(cwd=cwd) for fn in fns ]
 
 
-def qmcpack_process(data:list, plot=False) -> list:
+def qmcpack_process(data:list, name, plot=False) -> list:
     """ Hard-defined procedures for a typical QMCPACK data
         Note: per-system basis """
     # start by timestep extrapolation
@@ -406,9 +439,10 @@ def qmcpack_process(data:list, plot=False) -> list:
                     dfn=lambda x: x['timestep'],
                     cfn=lambda x: x['energy']/x['supercell'],
                     cefn=lambda x: x['bar']/x['supercell'],
-                    plot=plot, order=2,
+                    plot=plot, order=3,
                     xlabel='DMC timestep (a.u.)',
                     ylabel='DMC energy / prim. cell (Ha)',
+                    save_filename='ts_'+name+'_'+str(part[0]['supercell']),
                     title='')
             mergedpart = reduce(sum_dict, part)
             # TODO: functionalized, and to be less weird-ed
@@ -423,10 +457,13 @@ def qmcpack_process(data:list, plot=False) -> list:
     # TODO: no checks for available supercell sizes
     ext_result = extrapolate(_data,
             # note: there should be a check for not-equal result
-            dfn=lambda x: list(set(x['supercell']))[0],
+            dfn=lambda x: 1/(list(set(x['supercell']))[0]),
             cfn=lambda x: x['ts_ext']['energy'],
             cefn=lambda x: x['ts_ext']['bar'],
-            plot=plot, order=3)
+            xlabel='1/N',
+            save_filename='fn_'+name,
+            ylabel='DMC energy / prim. cell (Ha)',
+            plot=plot, order=2)
     procdata = reduce(sum_dict, _data)
     return (procdata, ext_result)
 
@@ -482,8 +519,8 @@ if __name__ == '__main__':
     assert len(labels) == len(downloaddirs) == len(source_endings)
     #print(source_endings)
     #print([[ fnmatch(x.path.split('/')[-1],ending) for x in os.scandir(downloaddir) ]
-    print([[ (x.path.split('/')[-1],ending) for x in os.scandir(downloaddir) ]
-        for downloaddir,ending in zip(downloaddirs, source_endings) ])
+    #print([[ (x.path.split('/')[-1],ending) for x in os.scandir(downloaddir) ]
+        #for downloaddir,ending in zip(downloaddirs, source_endings) ])
     labeledpaths = [
             (label, [ x.path
                 for x in os.scandir(downloaddir)
@@ -510,16 +547,16 @@ if __name__ == '__main__':
     for label, part in data.items():
         print(label)
         if plot:
-            procdata, ext_result = qmcpack_process(part, plot=True)
+            procdata, ext_result = qmcpack_process(part, plot=True, name=label)
         else:
-            procdata, ext_result = qmcpack_process(part, plot=False)
+            procdata, ext_result = qmcpack_process(part, plot=False, name=label)
         print(procdata)
         print(ext_result)
         final[label] = ext_result
     print(final)
     # temp: ugly "processing"
-    print(final['cplx'][0] - final['bare'][0] - final['hyd'][0])
-    print((final['cplx'][1]**2 + final['bare'][1]**2 + final['hyd'][1]**2)**0.5)
+    print('Energy: {}'.format(final['cplx'][0] - final['bare'][0] - final['hyd'][0]))
+    print('Bar: {}'.format((final['cplx'][1]**2 + final['bare'][1]**2 + final['hyd'][1]**2)**0.5))
     exit()
 
 
