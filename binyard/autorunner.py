@@ -79,7 +79,7 @@ def dmc_dat(_=None, start=5):
         return ''
     def serie(filename):
         return int(resolve(re.search(r'\.s[0-9]+\.', filename)).strip('.').strip('s'))
-    
+
     def inject(func):
         def injected(*args, **kwargs):
             dmc_dats = sorted(sorted([ x for x in os.listdir('.')
