@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Tiling of CUBE with trilinear interpolation."""
 import argparse
-#import time
+import time
 from itertools import product
+import sys
 import numpy as np
 from numpy.linalg import norm, inv
 from numba import jit
@@ -112,12 +113,14 @@ class Cube():
         """Volume enclosed by 3-vector."""
         return np.abs(np.dot(np.cross(cell[0], cell[1]), cell[2]))
 
+
     @staticmethod
     @jit(nopython=True)
     def tl_interpolate(p, grid, volumetric):
         """Trilinear interpolation of point values to the original point."""
         # Map point to primitive cell, in "grid" basis
         # lower and upper
+
         p0 = np.floor(p)
         p1 = p0+1.
         # Only for taking volumetric's values
@@ -154,34 +157,39 @@ class Cube():
         return volumetric[tuple(pp)]
 
     @staticmethod
-    def fill(fn, grid, ngrid, voxel, volumetric, icell):
-        """Fill grid with fn values."""
+    def fill(fn, grid, ngrid, voxel, volumetric, icell, j=2):
+        """Fill grid with fn values. Multithreaded"""
+        def p_grid(index, grid, icell):
+            """Get point in grid unit from the specified voxel index and cell."""
+            return ((voxel.T * index).T.sum(axis=0) @ icell) * grid
+
         a = np.empty(ngrid)
         for k in product(range(ngrid[0]), range(ngrid[1]), range(ngrid[2])):
-            point = ((voxel.T * k).T.sum(axis=0) @ icell) * grid
-            a[k] = fn(point, grid, volumetric)
+            a[k] = fn(p_grid(k, grid, icell), grid, volumetric)
         return a
 
     def tile(self, tilemat):
         """Resize the unit cell by the specified tiling matrix. In-place."""
+        det = np.linalg.det(tilemat)
         scale = np.abs(np.linalg.det(tilemat))
         # Scale unit cell.
         self.nat *= scale
         cellp = tilemat @ self.cell
-        fracsp = self.coordinates @ inv(cellp)
+        fracsp = self.coordinates @ inv(cellp) # Fractional coordinate in the new cell.
 
         it = inv(tilemat) # cell in cellp des.
 
         # Atomic coordinate tiling. Inefficient quick way.
+        nmi = tilemat.min().astype(int)
         nm = tilemat.max().astype(int)
         _coords = []
         _species = []
         _charges = []
         for r, s, c in zip(fracsp, self.species, self.charges):
-            for ijk in product(range(nm), repeat=3):
+            for ijk in product(range(nmi, nm), repeat=3):
                 thing = r + (ijk * it.T).T.sum(axis=0)
                 if self.lte(thing, 1.0) and self.gte(thing, 0.):
-                    _coords.append((cellp.T @ thing.T).T)
+                    _coords.append(thing @ cellp)
                     _species.append(s)
                     _charges.append(c)
         self.coordinates = np.array(_coords)
@@ -191,17 +199,17 @@ class Cube():
         # Charge density tiling.
         # Scale to keep voxel volume the same first,
         # then choose nearest integer grid size.
-        #scalenb = (0.5 * self.vol(self.cell) / self.vol(cellp)) ** (1/3)
         scalenb = (self.vol(self.cell) / self.vol(cellp)) ** (1/3)
         nvoxel = scalenb * (self.voxel @ self.icell) @ cellp
         # The voxel are parallel to the cell so we can do this.
         ngrid = (norm(cellp, axis=1) / norm(nvoxel, axis=1)).round().astype(int)
         # Resize the voxel for an integer grid
         nvoxel = (cellp.T / ngrid).T
-        #start = time.time()
+        start = time.time()
         nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
                                 nvoxel, self.volumetrics, self.icell)
-        #end = time.time()
+        end = time.time()
+        print(f"Filled in {end-start} secs.", file=sys.stderr)
         self.volumetrics = nvolumetric
         self.grid = ngrid
         self.voxel = nvoxel
