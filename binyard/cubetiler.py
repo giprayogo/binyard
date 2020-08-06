@@ -204,10 +204,21 @@ class Cube():
         ry = (min(corners[:, 1])-1, max(corners[:, 1])+1)
         rz = (min(corners[:, 2])-1, max(corners[:, 2])+1)
 
+        def isthere(objlist, obj, ops):
+            for friend in objlist:
+                for op in ops:
+                    friendrep = friend + op
+                    if np.isclose(friend, thing).all():
+                        return True
+            return False
+
         for r, s, c in zip(fracsp, self.species, self.charges):
             for ijk in product(range(*rx), range(*ry), range(*rz)):
                 thing = r + (ijk * it.T).T.sum(axis=0)
-                if self.lt(thing, 1.0) and self.gte(thing, 0.):
+                if self.lte(thing, 1.0) and self.gte(thing, 0.):
+                    # See if equivalent exists in the coordinate list.
+                    if isthere(_coords, thing, product((-1, 0, 1), repeat=3)):
+                        continue
                     _coords.append(thing @ cellp)
                     _species.append(s)
                     _charges.append(c)
@@ -226,7 +237,7 @@ class Cube():
         # The voxel are parallel to the cell so we can do this.
         ngrid = (norm(cellp, axis=1) / norm(nvoxel, axis=1)).round().astype(int)
         # Try to make the grid divisible by 6, whilst making minimal changes to the shape.
-        # Largest integer has lower fractional changes.
+        # Largest integer has lower fractional change.
         if (ngrid.prod() % 6):
             order = np.argsort(ngrid)
             largest_i = np.where(order == 2)[0]
