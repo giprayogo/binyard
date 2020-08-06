@@ -104,6 +104,11 @@ class Cube():
         return (a <= b).all() or np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
 
     @staticmethod
+    def lt(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        """Less than for floats."""
+        return (a <= b).all() and not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+
+    @staticmethod
     def gte(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         """Greater than equal for floats."""
         return (a >= b).all() or np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
@@ -175,6 +180,8 @@ class Cube():
         # Scale unit cell.
         self.nat *= scale
         cellp = tilemat @ self.cell
+        #print(self.cell)
+        #print(cellp)
         fracsp = self.coordinates @ inv(cellp) # Fractional coordinate in the new cell.
 
         it = inv(tilemat) # cell in cellp des.
@@ -185,16 +192,31 @@ class Cube():
         _coords = []
         _species = []
         _charges = []
+        # Find new cell's extremum.
+        corners = np.array([(ijk * cellp.T).T.sum(axis=0) @ self.icell
+                            for ijk in product((0,1), repeat=3)])
+        # Rounded (magnitude-wise) up.
+        def mround(e):
+            return (np.sign(e) * np.ceil(np.round(np.abs(e), 10))).astype(int)
+        corners = mround(corners)
+        # expanded just in case.
+        rx = (min(corners[:, 0])-1, max(corners[:, 0])+1)
+        ry = (min(corners[:, 1])-1, max(corners[:, 1])+1)
+        rz = (min(corners[:, 2])-1, max(corners[:, 2])+1)
+
         for r, s, c in zip(fracsp, self.species, self.charges):
-            for ijk in product(range(nmi, nm), repeat=3):
+            for ijk in product(range(*rx), range(*ry), range(*rz)):
                 thing = r + (ijk * it.T).T.sum(axis=0)
-                if self.lte(thing, 1.0) and self.gte(thing, 0.):
+                if self.lt(thing, 1.0) and self.gte(thing, 0.):
                     _coords.append(thing @ cellp)
                     _species.append(s)
                     _charges.append(c)
+        if len(_coords) != self.nat:
+            raise RuntimeError(f"Wrong tiling of coordinates ({len(_coords)}/{self.nat}).")
         self.coordinates = np.array(_coords)
         self.species = np.array(_species)
         self.charges = np.array(_charges)
+
 
         # Charge density tiling.
         # Scale to keep voxel volume the same first,
@@ -203,6 +225,19 @@ class Cube():
         nvoxel = scalenb * (self.voxel @ self.icell) @ cellp
         # The voxel are parallel to the cell so we can do this.
         ngrid = (norm(cellp, axis=1) / norm(nvoxel, axis=1)).round().astype(int)
+        # Try to make the grid divisible by 6, whilst making minimal changes to the shape.
+        # Largest integer has lower fractional changes.
+        if (ngrid.prod() % 6):
+            order = np.argsort(ngrid)
+            largest_i = np.where(order == 2)[0]
+            sec_largest_i = np.where(order == 1)[0]
+            if (ngrid.prod() % 3) and (ngrid.prod() % 2):
+                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+                ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
+            elif (ngrid.prod() % 3):
+                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+            else:
+                ngrid[largest_i] += ngrid[largest_i] % 2
         # Resize the voxel for an integer grid
         nvoxel = (cellp.T / ngrid).T
         start = time.time()
