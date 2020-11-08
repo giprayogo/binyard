@@ -182,7 +182,8 @@ class Cube():
         cellp = tilemat @ self.cell
         #print(self.cell)
         #print(cellp)
-        fracsp = self.coordinates @ inv(cellp) # Fractional coordinate in the new cell.
+        icellp = inv(cellp)
+        fracsp = self.coordinates @ icellp # Fractional coordinate in the new cell.
 
         it = inv(tilemat) # cell in cellp des.
 
@@ -205,10 +206,16 @@ class Cube():
         rz = (min(corners[:, 2])-1, max(corners[:, 2])+1)
 
         def isthere(objlist, obj, ops):
+            #print(obj)
             for friend in objlist:
+                ffriend = friend @ icellp
+                #print('-------------------------')
+                #print(ffriend)
                 for op in ops:
-                    friendrep = friend + op
-                    if np.isclose(friend, thing).all():
+                    #print(op)
+                    friendrep = ffriend + op
+                    #print(f"    {friendrep}")
+                    if np.isclose(friendrep, obj, atol=1.0e-4).all():
                         return True
             return False
 
@@ -217,12 +224,13 @@ class Cube():
                 thing = r + (ijk * it.T).T.sum(axis=0)
                 if self.lte(thing, 1.0) and self.gte(thing, 0.):
                     # See if equivalent exists in the coordinate list.
-                    if isthere(_coords, thing, product((-1, 0, 1), repeat=3)):
+                    if isthere(_coords, thing, list(product((-1, 0, 1), repeat=3))):
                         continue
                     _coords.append(thing @ cellp)
                     _species.append(s)
                     _charges.append(c)
-        if len(_coords) != self.nat:
+        if len(_coords) != int(self.nat):
+            print(np.round(_coords @ icellp, 4))
             raise RuntimeError(f"Wrong tiling of coordinates ({len(_coords)}/{self.nat}).")
         self.coordinates = np.array(_coords)
         self.species = np.array(_species)
