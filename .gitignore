@@ -1,3 +1,10 @@
 *.pyc
 tags
 .nfs*
+*.swp
+*keep
+*.vesta
+*.cube
+*.h5
+*.xml
+*.DS_Store

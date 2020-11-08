@@ -15,13 +15,6 @@ def common(x):
 def output_capturer(x):
     return x
 
-parser = argparse.ArgumentParser()
-parser.add_argument('files', nargs='*', default=common())
-parser.add_argument('-e', '--equil', nargs='*', type=int, default=None)
-args = parser.parse_args()
-if not args.equil:
-    args.equil = [0] * len(args.files)
-assert len(args.files) == len(args.equil)
 
 def resolve(regex_match):
     if regex_match:
@@ -33,6 +26,14 @@ def sort_by_series(x):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('files', nargs='*', default=common())
+    parser.add_argument('-e', '--equil', nargs='*', type=int, default=None)
+    args = parser.parse_args()
+    if not args.equil:
+        args.equil = [0] * len(args.files)
+    assert len(args.files) == len(args.equil)
+
     # divide files by number of twists
     scalar = {}
     equil_scalar = {}
