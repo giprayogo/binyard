@@ -71,9 +71,12 @@ def cubexmlheader(xmlfile):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-e', type=int, default=0)
-parser.add_argument('-i', required=True)
-parser.add_argument('f', nargs='+')
+parser.add_argument('-e', type=int, default=0,
+        help='Equillibration length')
+parser.add_argument('-i', required=True,
+        help='XML input file, used to get the cell geometry')
+parser.add_argument('f', nargs='+',
+        help='Density *stat.h5 files. Automatically twist averaged')
 args = parser.parse_args()
 
 header = cubexmlheader(args.i)
