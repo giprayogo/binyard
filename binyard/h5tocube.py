@@ -117,17 +117,27 @@ class ScalarField(object):
             for h5file in scalarfiles:
                 # see the repeated pattern?
                 f = h5py.File(h5file, 'r')
-                series = h5file.split('.')[2]
-                twist = h5file.split('.')[0].split('-')[-1]
+
+                if 'tw' in h5file:
+                    series = h5file.split('.')[2]
+                    twist = h5file.split('.')[0].split('-')[-1]
+                else:
+                    series = h5file.split('.')[1]
+                    twist = '0'
 
                 # this can be generalized with the previous one
                 u = f['Density']['value'][e:]
+                print(f['Density']['value'].shape)
+                print(u.shape)
+                #print(twist)
+                #print(series)
 
                 scalar.setdefault(series, {})
                 scalar[series].setdefault('u', {})
 
                 # as well as this one
-                scalar[series]['u'][twist] = np.array(u)
+                #scalar[series]['u'][twist] = np.array(u)
+                scalar[series]['u'][twist] = u
                 # note: just read; don't call statistical processings when not calling
     # up to here is OK
 
@@ -197,19 +207,30 @@ class ScalarField(object):
 
         # i.e. never mix series!
         # TODO: is there a better name than "val"?
-        for serie,val in scalar.items():
+        #scalar[series]['u'][twist] = np.array(u)
+        for serie, val in scalar.items():
             # first do the statistical processing
             # get the objects
             u = val['u']
             # also look to minimize repetitive patterns between u and d
             # I don't want to use this one too
 
-            umeans = [ x.mean() for x in u ]
-            ustds = [ x.std() for x in u ]
+            # Twist averaging.
+            #umeans = np.array([ x.mean(axis=2) for x in u.values() ])
+            #ustds = np.array([ x.std(axis=2) for x in u.values() ])
+            # Temporary for non-twisted
+            umeans = u['0'].mean(axis=0)
+            ustds = u['0'].std(axis=0)
+            print(u['0'].shape)
 
-            # twist averaging it is
+            # Average over steps.
             um = umeans.mean(0)
             ub = np.sqrt(sum([ x**2 for x in ustds ]))
+
+            #print(u.values())
+            #print(umeans.shape)
+            #print(ustds.shape)
+            #print(um.shape
 
             # this part for writing only
             # for the weird *.cube 6-shape (same padlength for everything)

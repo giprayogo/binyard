@@ -4,9 +4,23 @@ import argparse
 import time
 from itertools import product
 import sys
+from lxml import etree
+import h5py
 import numpy as np
 from numpy.linalg import norm, inv
 from numba import jit
+
+atomid = {
+        'Li': '3',
+        'V': '23',
+        'O': '8',
+        'S': '16',
+        'Se': '34',
+        'C': '6',
+        'Si': '14',
+        'H': '1',
+        'N': '7',
+        }
 
 class Cube():
     """Gaussian CUBE file.
@@ -50,6 +64,77 @@ class Cube():
         coordinates = scc[:, 2:]
         volumetrics = Cube.strit2np2d(lines[6+nat:])
         volumetrics = np.reshape(volumetrics, grid)
+        return cls(comments, nat, origin, grid, voxel, unit, species, charges,
+                   coordinates, volumetrics)
+
+    def get_header_from_xml(xmlfile):
+        """ Parse grid information from QMCPACK's XML.
+        Quick-patched from h5tocube.py"""
+        meta = dict()
+        tree = etree.parse(xmlfile)
+
+        # Kind of estimator.
+        if tree.xpath("//estimator[@type='spindensity']"):
+            meta['estimator'] = 'spindensity'
+        elif tree.xpath("//estimator[@type='density']"):
+            meta['estimator'] = 'density'
+        else:
+            meta['estimator'] = None
+        # Only support density for now.
+        assert meta['estimator'] == 'density'
+
+        for lattice in tree.xpath("///parameter[@name='lattice']"):
+            lattice = np.array(list(map(float, lattice.text.split())))
+            lattice = lattice.reshape(-1, 3)
+        for _ in tree.xpath("//estimator[@type='density']"):
+            delta = np.array([ float(x) for x in _.get('delta').split() ])
+            meta['grid'] = [int(x) for x in 1/delta ]
+            meta['dr'] = [x[0]/x[1] for x in zip(lattice, meta['grid'])]
+
+        for positions in tree.xpath("//attrib[@name='position']"):
+            position = np.array(list(map(float, positions.text.split())))
+            position = position.reshape(-1, 3)
+            # remember that the positions are in fractional coordinates
+            #meta['position'] = [sum([ y[0]*y[1] for y in zip(x, lattice) ]) for x in position]
+            meta['coordinates'] = position
+        for ionid in tree.xpath("//attrib[@name='ionid']"):
+            i = [ atomid[x.strip('0123456789')] for x in ionid.text.split()]
+            meta['species'] = np.array([x for x in i])
+            meta['charges'] = np.array([x for x in i]) # We never do weird things here.
+
+        meta['comments'] = ('QMCPACK density/spin density data\n'
+                            f'source file: {xmlfile}\n')
+
+        meta['nat'] = meta['species'].size
+        meta['origin'] = np.array([0., 0., 0.]) # Assume always so. 
+        meta['unit'] = 'bohr'
+        meta['voxel'] = np.vstack(meta['dr'])
+
+        return meta
+
+    @classmethod
+    def from_qmcpack_files(cls, h5_filename, xml_filename, e):
+        """From QMCPACK's h5 file. Density estimator only, no twist averaging.
+        Patched in from h5tocube.py"""
+
+        xml_meta = cls.get_header_from_xml(xml_filename)
+
+        # Headers.
+        comments = xml_meta['comments']
+        nat = xml_meta['nat']
+        origin = xml_meta['origin']
+        grid = xml_meta['grid']
+        voxel = xml_meta['voxel']
+        unit = xml_meta['unit']
+        species = xml_meta['species']
+        charges = xml_meta['charges']
+        coordinates = xml_meta['coordinates']
+
+        f = h5py.File(h5_filename, 'r')
+        u = f['Density']['value'][e:]
+        # TODO: no +-bar for now
+        volumetrics = np.array(u).mean(axis=0)[e:]
+
         return cls(comments, nat, origin, grid, voxel, unit, species, charges,
                    coordinates, volumetrics)
 
@@ -117,7 +202,6 @@ class Cube():
     def vol(cell):
         """Volume enclosed by 3-vector."""
         return np.abs(np.dot(np.cross(cell[0], cell[1]), cell[2]))
-
 
     @staticmethod
     @jit(nopython=True)
@@ -236,7 +320,6 @@ class Cube():
         self.species = np.array(_species)
         self.charges = np.array(_charges)
 
-
         # Charge density tiling.
         # Scale to keep voxel volume the same first,
         # then choose nearest integer grid size.
@@ -271,14 +354,26 @@ class Cube():
 def main():
     """Main."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('cubefile', help="Gaussian-style CUBE file")
-    parser.add_argument('tilemat', help="Tiling matrix")
+    parser.add_argument('--cubefile', help="Gaussian-style CUBE file")
+    parser.add_argument('--tilemat', help="Tiling matrix")
+    parser.add_argument('--qmcpack', action='store_true', help="QMCPACK mode")
+    parser.add_argument('--h5-file', '-d', help="QMCPACK HDF5")
+    parser.add_argument('--xml-file', '-x', help="QMCPACK XML")
+    parser.add_argument('-e', help="QMCPACK equilibration", default=0)
     args = parser.parse_args()
+    qmcpack_mode = args.qmcpack
+    h5file = args.h5_file
+    xmlfile = args.xml_file
+    e = args.e
+
     tilemat = np.fromstring(args.tilemat, sep=' ')
     tilemat = tilemat.reshape(3, 3)
 
     cubefile = args.cubefile
-    cube = Cube.from_file(cubefile)
+    if qmcpack_mode:
+        cube = Cube.from_qmcpack_files(h5file, xmlfile, e)
+    else:
+        cube = Cube.from_file(cubefile)
     cube.tile(tilemat)
     print(cube)
 
