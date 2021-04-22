@@ -53,6 +53,27 @@ class Cube():
         return cls(comments, nat, origin, grid, voxel, unit, species, charges,
                    coordinates, volumetrics)
 
+    @classmethod
+    def from_block_header(cls, header, volumetrics):
+        """From defined "header" and "volumetrics" section."""
+        # Headers.
+        lines = header.split('\n')
+
+        comments = [x.strip() for x in lines[:2]]
+        natorigin = np.fromstring(lines[2], sep=' ')
+        nat = natorigin[0].astype(np.int64)
+        origin = natorigin[1:]
+        voxelgrid = Cube.strit2np2d(lines[3:6])
+        grid = np.abs(voxelgrid[:, 0]).astype(np.int64)
+        voxel = voxelgrid[:, 1:]
+        unit = 'bohr' if (voxelgrid[:, 0] > 0).all() else 'angstrom'
+        scc = Cube.strit2np2d(lines[6:6+nat])
+        species = scc[:, 0].astype(np.int64)
+        charges = scc[:, 1].astype(np.int64)
+        coordinates = scc[:, 2:]
+        return cls(comments, nat, origin, grid, voxel, unit, species, charges,
+                   coordinates, volumetrics)
+
     def __str__(self):
         string = ''
         for _ in self.comments:
@@ -259,6 +280,33 @@ class Cube():
                 ngrid[largest_i] += ngrid[largest_i] % 2
         # Resize the voxel for an integer grid
         nvoxel = (cellp.T / ngrid).T
+        start = time.time()
+        nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
+                                nvoxel, self.volumetrics, self.icell)
+        end = time.time()
+        print(f"Filled in {end-start} secs.", file=sys.stderr)
+        self.volumetrics = nvolumetric
+        self.grid = ngrid
+        self.voxel = nvoxel
+
+    def regrid(self, ngrid):
+        """Adjust grid size. In-place."""
+        # Try to make the grid divisible by 6, whilst making minimal changes to the shape.
+        # Largest integer has lower fractional change.
+        if (ngrid.prod() % 6):
+            order = np.argsort(ngrid)
+            largest_i = np.where(order == 2)[0]
+            sec_largest_i = np.where(order == 1)[0]
+            if (ngrid.prod() % 3) and (ngrid.prod() % 2):
+                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+                ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
+            elif (ngrid.prod() % 3):
+                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+            else:
+                ngrid[largest_i] += ngrid[largest_i] % 2
+        # Resize the voxel for an integer grid
+        print(f"Re-grid from {self.grid} to {ngrid}")
+        nvoxel = (self.cell.T / ngrid).T
         start = time.time()
         nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
                                 nvoxel, self.volumetrics, self.icell)

@@ -1,11 +1,22 @@
 #!/usr/bin/env python
-# actually h5 to cube
-
-import h5py
+"""Convert QMCPACK *.stat.h5 densities/spin-densities to Gaussian CUBE."""
 import argparse
+import re
+import h5py
 import numpy as np
 from lxml import etree
 from numpy.linalg import norm
+from cubetiler import Cube
+
+SERIES_REGEX = re.compile(r'(?<=s)[0-9]+')
+TWIST_REGEX = re.compile(r'(?<=tw)[0-9]+')
+
+def single_search(regex, string, default=None):
+    """First-match search of a string given a regex. Catch non-match into default."""
+    match = regex.search(string)
+    if not match:
+        return default
+    return match.group(0)
 
 atomid = {
         'Li': '3',
@@ -93,8 +104,10 @@ class ScalarField(object):
             for h5file in scalarfiles:
                 f = h5py.File(h5file, 'r')
                 # NOTE: passive rename, functionalize for more general
-                series = h5file.split('.')[2]
-                twist = h5file.split('.')[0].split('-')[-1]
+                #series = h5file.split('.')[2]
+                #twist = h5file.split('.')[0].split('-')[-1]
+                series = single_search(SERIES_REGEX, h5file, '000')
+                twist = single_search(TWIST_REGEX, h5file, 0)
 
                 # up and down densities, complete
                 # NOTE: the format here change depending on QMCPACK version
@@ -117,8 +130,10 @@ class ScalarField(object):
             for h5file in scalarfiles:
                 # see the repeated pattern?
                 f = h5py.File(h5file, 'r')
-                series = h5file.split('.')[2]
-                twist = h5file.split('.')[0].split('-')[-1]
+                #series = h5file.split('.')[2]
+                #twist = h5file.split('.')[0].split('-')[-1]
+                series = single_search(SERIES_REGEX, h5file, '000')
+                twist = single_search(TWIST_REGEX, h5file, 0)
 
                 # this can be generalized with the previous one
                 u = f['Density']['value'][e:]
@@ -197,36 +212,59 @@ class ScalarField(object):
 
         # i.e. never mix series!
         # TODO: is there a better name than "val"?
-        for serie,val in scalar.items():
+        #print(scalar.keys())
+        for serie, val in scalar.items():
             # first do the statistical processing
             # get the objects
             u = val['u']
+            #print(u)
+            #exit()
             # also look to minimize repetitive patterns between u and d
             # I don't want to use this one too
+            #print(list(u.values())[0])
+            #print(list(u.values())[0].shape)
 
-            umeans = [ x.mean() for x in u ]
-            ustds = [ x.std() for x in u ]
+            umeans = [ x.mean(axis=0) for x in u.values() ]
+            ustds = [ x.std(axis=0) for x in u.values() ]
+            #print(len(umeans))
+            #print(umeans[0].shape)
+            #exit()
 
+            assert len(umeans) == len(ustds)
             # twist averaging it is
-            um = umeans.mean(0)
-            ub = np.sqrt(sum([ x**2 for x in ustds ]))
+            if len(umeans) > 1:
+                um = umeans.mean(axis=0)
+                ub = np.sqrt(sum([ x**2 for x in ustds ]))
+            else:
+                um = umeans[0]
+                ub = ustds[0]
 
-            # this part for writing only
-            # for the weird *.cube 6-shape (same padlength for everything)
-            padlength = um.shape[0] % 6
-            um = np.append(um, np.zeros(padlength))
-            ub = np.append(ub, np.zeros(padlength))
+            if estimator == 'density':
+                # Scale for 6-divisibility (CUBE file limitation)
+                cube_u = Cube.from_block_header(header, um)
+                cube_up = Cube.from_block_header(header, um-ub)
+                cube_um = Cube.from_block_header(header, um+ub)
+                # Standardized size
+                cube_u.regrid(np.array([100, 100, 100]))
+                cube_up.regrid(np.array([100, 100, 100]))
+                cube_um.regrid(np.array([100, 100, 100]))
 
-            # reshape
-            um = um.reshape(-1, 6)
-            ub = ub.reshape(-1, 6)
+                cube_u.to_file(self.xmlfile.replace('.xml', '.Density_u.cube'))
+                cube_up.to_file(self.xmlfile.replace('.xml', '.Density_u-err.cube'))
+                cube_um.to_file(self.xmlfile.replace('.xml', '.Density_u+err.cube'))
 
-            np.savetxt('qmc.'+serie+'.SpinDensity_u.cube', um, header=header, comments='')
-            np.savetxt('qmc.'+serie+'.SpinDensity_u-err.cube', um-ub, header=header, comments='')
-            np.savetxt('qmc.'+serie+'.SpinDensity_u+err.cube', um+ub, header=header, comments='')
-
-
-            if estimator == 'spindensity':
+                #np.savetxt('qmc.'+serie+'.Density_u.cube', um, header=header, comments='')
+                #np.savetxt('qmc.'+serie+'.Density_u-err.cube', um-ub, header=header, comments='')
+                #np.savetxt('qmc.'+serie+'.Density_u+err.cube', um+ub, header=header, comments='')
+            elif estimator == 'spindensity':
+                # Old implementation
+                # this part for writing only
+                # for the weird *.cube 6-shape (same padlength for everything)
+                padlength = um.shape[0] % 6
+                um = np.append(um, np.zeros(padlength))
+                ub = np.append(ub, np.zeros(padlength))
+                um = um.reshape(-1, 6)
+                ub = ub.reshape(-1, 6)
                 d = val['d']
 
                 dmeans = [ x.mean() for x in d ]
