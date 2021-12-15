@@ -67,6 +67,74 @@ class Cube():
         return cls(comments, nat, origin, grid, voxel, unit, species, charges,
                    coordinates, volumetrics)
 
+    def get_header_from_xml(xmlfile):
+        """ Parse grid information from QMCPACK's XML.
+        Quick-patched from h5tocube.py"""
+        meta = dict()
+        tree = etree.parse(xmlfile)
+
+        # Kind of estimator.
+        if tree.xpath("//estimator[@type='spindensity']"):
+            meta['estimator'] = 'spindensity'
+        elif tree.xpath("//estimator[@type='density']"):
+            meta['estimator'] = 'density'
+        else:
+            meta['estimator'] = None
+        # Only support density for now.
+        assert meta['estimator'] == 'density'
+
+        for lattice in tree.xpath("///parameter[@name='lattice']"):
+            lattice = np.array(list(map(float, lattice.text.split())))
+            lattice = lattice.reshape(-1, 3)
+        for _ in tree.xpath("//estimator[@type='density']"):
+            delta = np.array([ float(x) for x in _.get('delta').split() ])
+            meta['grid'] = [int(x) for x in 1/delta ]
+            meta['dr'] = [x[0]/x[1] for x in zip(lattice, meta['grid'])]
+
+        for positions in tree.xpath("//attrib[@name='position']"):
+            position = np.array(list(map(float, positions.text.split())))
+            position = position.reshape(-1, 3)
+            # remember that the positions are in fractional coordinates
+            #meta['position'] = [sum([ y[0]*y[1] for y in zip(x, lattice) ]) for x in position]
+            meta['coordinates'] = position
+        for ionid in tree.xpath("//attrib[@name='ionid']"):
+            i = [ atomid[x.strip('0123456789')] for x in ionid.text.split()]
+            meta['species'] = np.array([x for x in i])
+            meta['charges'] = np.array([x for x in i]) # We never do weird things here.
+
+        meta['comments'] = ('QMCPACK density/spin density data\n'
+                            f'source file: {xmlfile}\n')
+
+        meta['nat'] = meta['species'].size
+        meta['origin'] = np.array([0., 0., 0.]) # Assume always so.
+        meta['unit'] = 'bohr'
+        meta['voxel'] = np.vstack(meta['dr'])
+
+        return meta
+
+    @classmethod
+    def from_qmcpack_files(cls, h5_filename, xml_filename, e):
+     """From QMCPACK's h5 file. Density estimator only, no twist averaging.
+     Patched in from h5tocube.py"""
+
+     xml_meta = cls.get_header_from_xml(xml_filename)
+     comments = xml_meta['comments']
+     nat = xml_meta['nat']
+     origin = xml_meta['origin']
+     grid = xml_meta['grid']
+     voxel = xml_meta['voxel']
+     unit = xml_meta['unit']
+     species = xml_meta['species']
+     charges = xml_meta['charges']
+     coordinates = xml_meta['coordinates']
+
+     f = h5py.File(h5_filename, 'r')
+     u = f['Density']['value'][e:]
+     # TODO: no +-bar for now
+     volumetrics = np.array(u).mean(axis=0)[e:]
+     return cls(comments, nat, origin, grid, voxel, unit, species, charges,
+               coordinates, volumetrics)
+
     @classmethod
     def from_block_header(cls, header, volumetrics):
         """From defined "header" and "volumetrics" section."""
