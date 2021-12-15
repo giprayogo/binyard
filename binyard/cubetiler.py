@@ -62,7 +62,7 @@ class Cube():
         species = scc[:, 0].astype(np.int64)
         charges = scc[:, 1].astype(np.int64)
         coordinates = scc[:, 2:]
-        volumetrics = Cube.strit2np2d(lines[6+nat:])
+        volumetrics = Cube.strit2np1d(lines[6+nat:])
         volumetrics = np.reshape(volumetrics, grid)
         return cls(comments, nat, origin, grid, voxel, unit, species, charges,
                    coordinates, volumetrics)
@@ -171,7 +171,18 @@ class Cube():
                                            np.reshape(self.charges, (self.charges.shape[0], 1)),
                                            self.coordinates)),
                                 fmt='{:.0f} {:.0f} {:.15f} {:.15f} {:.15f}')
-        string += self.np2d2str(np.reshape(self.volumetrics, (-1, 6)))
+        # TODO: This part
+        # string += self.np2d2str(np.reshape(self.volumetrics, (-1, 6)))
+        print("Writing", file=sys.stderr)
+        # Proper format
+        x, y, z = self.volumetrics.shape
+        for i in range(x):
+            for j in range(y):
+                for k in range(z):
+                    string += str(self.volumetrics[i][j][k])
+                    if (k % 6) == 5:
+                        string += "\n"
+                string += "\n"
         return string
 
     def to_file(self, filename):
@@ -194,12 +205,22 @@ class Cube():
         return string
 
     @staticmethod
+    def strit2np1d(iterable):
+        """String iterable to 1d Numpy array."""
+        array = []
+        for _ in iterable:
+            array.append(np.fromstring(_, sep=' '))
+        return np.concatenate(array)
+
+    @staticmethod
     def strit2np2d(iterable):
         """String iterable to 2d Numpy array."""
         array = []
         for _ in iterable:
             array.append(np.fromstring(_, sep=' '))
-        return np.array(array)
+        # return np.array(array)
+        # return np.concatenate(array)
+        return np.stack(array)
 
     @staticmethod
     def lte(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -275,7 +296,7 @@ class Cube():
             a[k] = fn(p_grid(k, grid, icell), grid, volumetric)
         return a
 
-    def tile(self, tilemat):
+    def tile(self, tilemat, target_grid=None):
         """Resize the unit cell by the specified tiling matrix. In-place."""
         det = np.linalg.det(tilemat)
         scale = np.abs(np.linalg.det(tilemat))
@@ -344,48 +365,54 @@ class Cube():
         scalenb = (self.vol(self.cell) / self.vol(cellp)) ** (1/3)
         nvoxel = scalenb * (self.voxel @ self.icell) @ cellp
         # The voxel are parallel to the cell so we can do this.
-        ngrid = (norm(cellp, axis=1) / norm(nvoxel, axis=1)).round().astype(int)
+        if target_grid is None:
+            ngrid = (norm(cellp, axis=1) / norm(nvoxel, axis=1)).round().astype(int)
+        else:
+            ngrid = target_grid
+
+        self.regrid(ngrid)
         # Try to make the grid divisible by 6, whilst making minimal changes to the shape.
         # Largest integer has lower fractional change.
-        if (ngrid.prod() % 6):
-            order = np.argsort(ngrid)
-            largest_i = np.where(order == 2)[0]
-            sec_largest_i = np.where(order == 1)[0]
-            if (ngrid.prod() % 3) and (ngrid.prod() % 2):
-                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
-                ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
-            elif (ngrid.prod() % 3):
-                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
-            else:
-                ngrid[largest_i] += ngrid[largest_i] % 2
-        # Resize the voxel for an integer grid
-        nvoxel = (cellp.T / ngrid).T
-        start = time.time()
-        nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
-                                nvoxel, self.volumetrics, self.icell)
-        end = time.time()
-        print(f"Filled in {end-start} secs.", file=sys.stderr)
-        self.volumetrics = nvolumetric
-        self.grid = ngrid
-        self.voxel = nvoxel
+        # if (ngrid.prod() % 6):
+        #     order = np.argsort(ngrid)
+        #     largest_i = np.where(order == 2)[0]
+        #     sec_largest_i = np.where(order == 1)[0]
+        #     if (ngrid.prod() % 3) and (ngrid.prod() % 2):
+        #         ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+        #         ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
+        #     elif (ngrid.prod() % 3):
+        #         ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+        #     else:
+        #         ngrid[largest_i] += ngrid[largest_i] % 2
+        # # Resize the voxel for an integer grid
+        # nvoxel = (cellp.T / ngrid).T
+        # start = time.time()
+        # nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
+        #                         nvoxel, self.volumetrics, self.icell)
+        # end = time.time()
+        # print(f"Filled in {end-start} secs.", file=sys.stderr)
+        # self.volumetrics = nvolumetric
+        # self.grid = ngrid
+        # self.voxel = nvoxel
 
     def regrid(self, ngrid):
         """Adjust grid size. In-place."""
         # Try to make the grid divisible by 6, whilst making minimal changes to the shape.
         # Largest integer has lower fractional change.
-        if (ngrid.prod() % 6):
-            order = np.argsort(ngrid)
-            largest_i = np.where(order == 2)[0]
-            sec_largest_i = np.where(order == 1)[0]
-            if (ngrid.prod() % 3) and (ngrid.prod() % 2):
-                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
-                ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
-            elif (ngrid.prod() % 3):
-                ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
-            else:
-                ngrid[largest_i] += ngrid[largest_i] % 2
+        # NOTE: not necessary!
+        # if (ngrid.prod() % 6):
+        #     order = np.argsort(ngrid)
+        #     largest_i = np.where(order == 2)[0]
+        #     sec_largest_i = np.where(order == 1)[0]
+        #     if (ngrid.prod() % 3) and (ngrid.prod() % 2):
+        #         ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+        #         ngrid[sec_largest_i] += ngrid[sec_largest_i] % 2
+        #     elif (ngrid.prod() % 3):
+        #         ngrid[largest_i] += 3 - (ngrid[largest_i] % 3)
+        #     else:
+        #         ngrid[largest_i] += ngrid[largest_i] % 2
         # Resize the voxel for an integer grid
-        print(f"Re-grid from {self.grid} to {ngrid}")
+        print(f"Re-grid from {self.grid} to {ngrid}", file=sys.stderr)
         nvoxel = (self.cell.T / ngrid).T
         start = time.time()
         nvolumetric = self.fill(self.tl_interpolate, self.grid, ngrid,
@@ -401,6 +428,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cubefile', help="Gaussian-style CUBE file")
     parser.add_argument('--tilemat', help="Tiling matrix")
+    parser.add_argument('--cube-grid', help="Volumetric grid", default=None)
     parser.add_argument('--qmcpack', action='store_true', help="QMCPACK mode")
     parser.add_argument('--h5-file', '-d', help="QMCPACK HDF5")
     parser.add_argument('--xml-file', '-x', help="QMCPACK XML")
@@ -411,7 +439,7 @@ def main():
     xmlfile = args.xml_file
     e = args.e
 
-    tilemat = np.fromstring(args.tilemat, sep=' ')
+    tilemat = np.fromstring(args.tilemat, sep=' ', dtype=int)
     tilemat = tilemat.reshape(3, 3)
 
     cubefile = args.cubefile
@@ -419,7 +447,11 @@ def main():
         cube = Cube.from_qmcpack_files(h5file, xmlfile, e)
     else:
         cube = Cube.from_file(cubefile)
-    cube.tile(tilemat)
+    if args.cube_grid is None:
+        cube.tile(tilemat)
+    else:
+        grid = np.fromstring(args.cube_grid, sep=' ', dtype=int)
+        cube.tile(tilemat, grid)
     print(cube)
 
 if __name__ == '__main__':
