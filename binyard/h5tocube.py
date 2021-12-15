@@ -22,6 +22,7 @@ atomid = {
         'Li': '3',
         'V': '23',
         'O': '8',
+        'N': '7',
         'S': '16',
         'Se': '34',
         'C': '6',
@@ -56,6 +57,7 @@ class ScalarField(object):
         self.e = e
         e = self.e
 
+        print("Working on XML.")
         # whatever this lattice is
         for lattice in tree.xpath("///parameter[@name='lattice']"):
             l = np.array(list(map(float, lattice.text.split())))
@@ -98,10 +100,12 @@ class ScalarField(object):
         # start of h5 parser
         # TODO: also no reblocking here
 
+        print("Working on HDF5.")
         self.scalar = {}
         scalar = self.scalar
         if estimator == 'spindensity':
             for h5file in scalarfiles:
+                raise RuntimeError("Not implemented!")
                 f = h5py.File(h5file, 'r')
                 # NOTE: passive rename, functionalize for more general
                 #series = h5file.split('.')[2]
@@ -129,7 +133,9 @@ class ScalarField(object):
         elif estimator == 'density':
             for h5file in scalarfiles:
                 # see the repeated pattern?
+                print("Reading HDF5 file.")
                 f = h5py.File(h5file, 'r')
+                print("Read.")
                 #series = h5file.split('.')[2]
                 #twist = h5file.split('.')[0].split('-')[-1]
                 series = single_search(SERIES_REGEX, h5file, '000')
@@ -245,10 +251,14 @@ class ScalarField(object):
                 cube_up = Cube.from_block_header(header, um-ub)
                 cube_um = Cube.from_block_header(header, um+ub)
                 # Standardized size
+                print("Resizing (mean) to 100x100x100")
                 cube_u.regrid(np.array([100, 100, 100]))
+                print("Resizing (+) to 100x100x100")
                 cube_up.regrid(np.array([100, 100, 100]))
+                print("Resizing (-) to 100x100x100")
                 cube_um.regrid(np.array([100, 100, 100]))
 
+                print("Saving.")
                 cube_u.to_file(self.xmlfile.replace('.xml', '.Density_u.cube'))
                 cube_up.to_file(self.xmlfile.replace('.xml', '.Density_u-err.cube'))
                 cube_um.to_file(self.xmlfile.replace('.xml', '.Density_u+err.cube'))
@@ -260,6 +270,7 @@ class ScalarField(object):
                 # Old implementation
                 # this part for writing only
                 # for the weird *.cube 6-shape (same padlength for everything)
+                raise RuntimeError("Not implemented!")
                 padlength = um.shape[0] % 6
                 um = np.append(um, np.zeros(padlength))
                 ub = np.append(ub, np.zeros(padlength))
@@ -445,6 +456,7 @@ args = parser.parse_args()
 xmlfile = args.i
 scalarfiles = args.f
 e = args.e
+
 
 cell = ScalarField(xmlfile, scalarfiles, e)
 estimator = cell.estimator
