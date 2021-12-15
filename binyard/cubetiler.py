@@ -176,14 +176,19 @@ class Cube():
         print("Writing", file=sys.stderr)
         # Proper format
         x, y, z = self.volumetrics.shape
+        # Quick fix
+        was_newline = False
         for i in range(x):
             for j in range(y):
                 for k in range(z):
-                    string += str(self.volumetrics[i][j][k])
+                    was_newline = False
+                    string += f"{self.volumetrics[i][j][k]} "
                     if (k % 6) == 5:
                         string += "\n"
-                string += "\n"
-        return string
+                        was_newline = True
+                if not was_newline:
+                    string += "\n"
+        return string.strip()
 
     def to_file(self, filename):
         """Well what else."""
@@ -423,11 +428,17 @@ class Cube():
         self.grid = ngrid
         self.voxel = nvoxel
 
+    def normalize(self):
+        """Normalize volumetric data"""
+        volumetric_sum = np.sum(self.volumetrics)
+        self.volumetrics /= volumetric_sum
+
 def main():
     """Main."""
     parser = argparse.ArgumentParser()
     parser.add_argument('--cubefile', help="Gaussian-style CUBE file")
-    parser.add_argument('--tilemat', help="Tiling matrix")
+    parser.add_argument('--tilemat', help="Tiling matrix", default=None)
+    parser.add_argument('--normal', help="Normalize volumetric data", action="store_true")
     parser.add_argument('--cube-grid', help="Volumetric grid", default=None)
     parser.add_argument('--qmcpack', action='store_true', help="QMCPACK mode")
     parser.add_argument('--h5-file', '-d', help="QMCPACK HDF5")
@@ -439,19 +450,29 @@ def main():
     xmlfile = args.xml_file
     e = args.e
 
-    tilemat = np.fromstring(args.tilemat, sep=' ', dtype=int)
-    tilemat = tilemat.reshape(3, 3)
-
     cubefile = args.cubefile
     if qmcpack_mode:
         cube = Cube.from_qmcpack_files(h5file, xmlfile, e)
     else:
         cube = Cube.from_file(cubefile)
-    if args.cube_grid is None:
-        cube.tile(tilemat)
+
+    if args.tilemat is not None:
+        tilemat = np.fromstring(args.tilemat, sep=' ', dtype=int)
+        tilemat = tilemat.reshape(3, 3)
+
+        if args.cube_grid is None:
+            cube.tile(tilemat)
+        else:
+            grid = np.fromstring(args.cube_grid, sep=' ', dtype=int)
+            cube.tile(tilemat, grid)
     else:
-        grid = np.fromstring(args.cube_grid, sep=' ', dtype=int)
-        cube.tile(tilemat, grid)
+        if args.cube_grid is not None:
+            grid = np.fromstring(args.cube_grid, sep=' ', dtype=int)
+            cube.regrid(grid)
+
+    if args.normal:
+        cube.normalize()
+
     print(cube)
 
 if __name__ == '__main__':
