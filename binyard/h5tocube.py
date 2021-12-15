@@ -143,12 +143,17 @@ class ScalarField(object):
 
                 # this can be generalized with the previous one
                 u = f['Density']['value'][e:]
+                print(f['Density']['value'].shape)
+                print(u.shape)
+                #print(twist)
+                #print(series)
 
                 scalar.setdefault(series, {})
                 scalar[series].setdefault('u', {})
 
                 # as well as this one
-                scalar[series]['u'][twist] = np.array(u)
+                #scalar[series]['u'][twist] = np.array(u)
+                scalar[series]['u'][twist] = u
                 # note: just read; don't call statistical processings when not calling
     # up to here is OK
 

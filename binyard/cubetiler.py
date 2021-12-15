@@ -4,9 +4,23 @@ import argparse
 import time
 from itertools import product
 import sys
+from lxml import etree
+import h5py
 import numpy as np
 from numpy.linalg import norm, inv
 from numba import jit
+
+atomid = {
+        'Li': '3',
+        'V': '23',
+        'O': '8',
+        'S': '16',
+        'Se': '34',
+        'C': '6',
+        'Si': '14',
+        'H': '1',
+        'N': '7',
+        }
 
 class Cube():
     """Gaussian CUBE file.
@@ -139,7 +153,6 @@ class Cube():
         """Volume enclosed by 3-vector."""
         return np.abs(np.dot(np.cross(cell[0], cell[1]), cell[2]))
 
-
     @staticmethod
     @jit(nopython=True)
     def tl_interpolate(p, grid, volumetric):
@@ -257,7 +270,6 @@ class Cube():
         self.species = np.array(_species)
         self.charges = np.array(_charges)
 
-
         # Charge density tiling.
         # Scale to keep voxel volume the same first,
         # then choose nearest integer grid size.
@@ -319,14 +331,26 @@ class Cube():
 def main():
     """Main."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('cubefile', help="Gaussian-style CUBE file")
-    parser.add_argument('tilemat', help="Tiling matrix")
+    parser.add_argument('--cubefile', help="Gaussian-style CUBE file")
+    parser.add_argument('--tilemat', help="Tiling matrix")
+    parser.add_argument('--qmcpack', action='store_true', help="QMCPACK mode")
+    parser.add_argument('--h5-file', '-d', help="QMCPACK HDF5")
+    parser.add_argument('--xml-file', '-x', help="QMCPACK XML")
+    parser.add_argument('-e', help="QMCPACK equilibration", default=0)
     args = parser.parse_args()
+    qmcpack_mode = args.qmcpack
+    h5file = args.h5_file
+    xmlfile = args.xml_file
+    e = args.e
+
     tilemat = np.fromstring(args.tilemat, sep=' ')
     tilemat = tilemat.reshape(3, 3)
 
     cubefile = args.cubefile
-    cube = Cube.from_file(cubefile)
+    if qmcpack_mode:
+        cube = Cube.from_qmcpack_files(h5file, xmlfile, e)
+    else:
+        cube = Cube.from_file(cubefile)
     cube.tile(tilemat)
     print(cube)
 
